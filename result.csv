@@ -1,0 +1,11 @@
+测试用例ID,是否成功,状态码,响应体,错误信息,耗时(ms)
+test_1,false,0,,"发送请求失败: Post ""http://ast.abc.com/test"": dial tcp: lookup ast.abc.com: no such host",0
+test_2,false,0,,"发送请求失败: Post ""http://ast.abc.com/test"": dial tcp: lookup ast.abc.com: no such host",0
+test_3,false,0,,"发送请求失败: Post ""http://ast.abc.com/test"": dial tcp: lookup ast.abc.com: no such host",0
+test_4,false,0,,"发送请求失败: Post ""http://ast.abc.com/test"": dial tcp: lookup ast.abc.com: no such host",0
+test_5,false,0,,"发送请求失败: Post ""http://ast.abc.com/test"": dial tcp: lookup ast.abc.com: no such host",0
+test_6,false,0,,"发送请求失败: Post ""http://ast.abc.com/test"": dial tcp: lookup ast.abc.com: no such host",0
+test_7,false,0,,"发送请求失败: Post ""http://ast.abc.com/test"": dial tcp: lookup ast.abc.com: no such host",0
+test_8,false,0,,"发送请求失败: Post ""http://ast.abc.com/test"": dial tcp: lookup ast.abc.com: no such host",0
+test_9,false,0,,"发送请求失败: Post ""http://ast.abc.com/test"": dial tcp: lookup ast.abc.com: no such host",0
+test_10,false,0,,"发送请求失败: Post ""http://ast.abc.com/test"": dial tcp: lookup ast.abc.com: no such host",0

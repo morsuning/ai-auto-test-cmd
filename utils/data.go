@@ -352,15 +352,76 @@ func nodeToMap(node interface{}) interface{} {
 	}
 }
 
+// convertNumbers 将json.Number转换为适当的数字类型
+func convertNumbers(data map[string]interface{}) map[string]interface{} {
+	result := make(map[string]interface{})
+	for key, value := range data {
+		switch v := value.(type) {
+		case json.Number:
+			// 尝试转换为整数
+			if intVal, err := v.Int64(); err == nil {
+				// 检查是否在int范围内
+				if intVal >= math.MinInt32 && intVal <= math.MaxInt32 {
+					result[key] = int(intVal)
+				} else {
+					result[key] = intVal
+				}
+			} else {
+				// 转换为浮点数
+				if floatVal, err := v.Float64(); err == nil {
+					result[key] = floatVal
+				} else {
+					// 保持原始字符串
+					result[key] = string(v)
+				}
+			}
+		case map[string]interface{}:
+			// 递归处理嵌套对象
+			result[key] = convertNumbers(v)
+		case []interface{}:
+			// 处理数组
+			arr := make([]interface{}, len(v))
+			for i, item := range v {
+				if itemMap, ok := item.(map[string]interface{}); ok {
+					arr[i] = convertNumbers(itemMap)
+				} else if itemNum, ok := item.(json.Number); ok {
+					if intVal, err := itemNum.Int64(); err == nil {
+						if intVal >= math.MinInt32 && intVal <= math.MaxInt32 {
+							arr[i] = int(intVal)
+						} else {
+							arr[i] = intVal
+						}
+					} else if floatVal, err := itemNum.Float64(); err == nil {
+						arr[i] = floatVal
+					} else {
+						arr[i] = string(itemNum)
+					}
+				} else {
+					arr[i] = item
+				}
+			}
+			result[key] = arr
+		default:
+			result[key] = value
+		}
+	}
+	return result
+}
+
 // ParseJSON 解析JSON字符串并保留字段顺序
 func ParseJSON(jsonStr string) (map[string]interface{}, error) {
 	// 创建一个空接口来存储解析结果
 	var result map[string]interface{}
 
-	// 解析JSON
-	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
+	// 使用Decoder来保持数字的原始格式
+	decoder := json.NewDecoder(strings.NewReader(jsonStr))
+	decoder.UseNumber()
+	if err := decoder.Decode(&result); err != nil {
 		return nil, fmt.Errorf("解析JSON失败: %v", err)
 	}
+
+	// 转换json.Number为适当的类型
+	result = convertNumbers(result)
 
 	// 记录字段顺序
 	// 由于Go的标准json包不保留字段顺序，我们需要手动提取顺序
@@ -519,14 +580,33 @@ func generateVariation(value interface{}, variationRate float64) interface{} {
 	// 根据值的类型进行不同处理
 	switch v := value.(type) {
 	case int, int8, int16, int32, int64:
-		// 整数类型，上下浮动指定比例
+		// 整数类型，上下浮动指定比例，确保结果仍然是整数
 		intVal := reflect.ValueOf(v).Int()
 		variation := int64(float64(intVal) * variationRate)
-		// 确保结果仍然是整数
-		return intVal + rand.Int63n(2*variation+1) - variation
+		if variation == 0 {
+			variation = 1 // 至少有1的变化
+		}
+		// 生成随机变化值，确保结果仍然是整数
+		newVal := intVal + rand.Int63n(2*variation+1) - variation
+		
+		// 根据原始类型返回相应的整数类型
+		switch v.(type) {
+		case int:
+			return int(newVal)
+		case int8:
+			return int8(newVal)
+		case int16:
+			return int16(newVal)
+		case int32:
+			return int32(newVal)
+		case int64:
+			return newVal
+		default:
+			return int(newVal)
+		}
 
 	case float32, float64:
-		// 浮点数类型，上下浮动指定比例
+		// 浮点数类型，上下浮动指定比例，保持原始精度
 		floatVal := reflect.ValueOf(v).Float()
 		variation := floatVal * variationRate
 		newVal := floatVal + (rand.Float64()*2-1)*variation
@@ -538,11 +618,28 @@ func generateVariation(value interface{}, variationRate float64) interface{} {
 			decimalPlaces = len(origStr) - dotIndex - 1
 		}
 		
-		// 使用相同的精度格式化新值
+		// 使用相同的精度格式化新值并返回相应的类型
 		if decimalPlaces > 0 {
-			return math.Round(newVal*math.Pow10(decimalPlaces)) / math.Pow10(decimalPlaces)
+			roundedVal := math.Round(newVal*math.Pow10(decimalPlaces)) / math.Pow10(decimalPlaces)
+			switch v.(type) {
+			case float32:
+				return float32(roundedVal)
+			case float64:
+				return roundedVal
+			default:
+				return roundedVal
+			}
 		}
-		return newVal
+		
+		// 没有小数部分的情况
+		switch v.(type) {
+		case float32:
+			return float32(newVal)
+		case float64:
+			return newVal
+		default:
+			return newVal
+		}
 
 	case string:
 		// 检查是否是逗号分隔的数组（XML中的数组表示）
@@ -609,23 +706,211 @@ func generateVariation(value interface{}, variationRate float64) interface{} {
 }
 
 // randomizeString 随机修改字符串
+// 字符串长度可进行10%范围内的变化，内容50%的字符随机变更
 func randomizeString(s string) string {
-	// 如果字符串很短，直接返回
-	if len(s) < 3 {
-		return s
+	// 如果字符串很短，至少保证最小长度为1
+	originalLen := len(s)
+	if originalLen == 0 {
+		return "a" // 空字符串返回一个随机字符
 	}
 
-	// 将字符串转换为字符数组
-	runes := []rune(s)
+	// 计算新长度：在原长度的90%-110%范围内随机变化
+	minLen := int(float64(originalLen) * 0.9)
+	if minLen < 1 {
+		minLen = 1
+	}
+	maxLen := int(float64(originalLen) * 1.1)
+	if maxLen < minLen {
+		maxLen = minLen
+	}
 	
-	// 随机修改1-3个字符
-	changeCount := rand.Intn(3) + 1
-	for i := 0; i < changeCount; i++ {
-		pos := rand.Intn(len(runes))
-		runes[pos] = rune(rand.Intn(26) + 'a') // 随机替换为小写字母
+	// 随机确定新长度
+	newLen := minLen + rand.Intn(maxLen-minLen+1)
+	
+	// 将原字符串转换为字符数组
+	runes := []rune(s)
+	originalRunes := make([]rune, len(runes))
+	copy(originalRunes, runes)
+	
+	// 字符集：字母和数字的组合
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	
+	// 如果新长度与原长度不同，需要调整字符串长度
+	if newLen != originalLen {
+		if newLen > originalLen {
+			// 需要扩展字符串，在随机位置插入随机字符
+			for i := 0; i < newLen-originalLen; i++ {
+				insertPos := rand.Intn(len(runes) + 1)
+				newChar := rune(charset[rand.Intn(len(charset))])
+				// 在指定位置插入字符
+				runes = append(runes[:insertPos], append([]rune{newChar}, runes[insertPos:]...)...)
+			}
+		} else {
+			// 需要缩短字符串，随机删除字符
+			for i := 0; i < originalLen-newLen; i++ {
+				if len(runes) > 1 {
+					deletePos := rand.Intn(len(runes))
+					runes = append(runes[:deletePos], runes[deletePos+1:]...)
+				}
+			}
+		}
+	}
+	
+	// 随机变更50%的字符
+	changeCount := len(runes) / 2
+	if changeCount == 0 && len(runes) > 0 {
+		changeCount = 1 // 至少变更一个字符
+	}
+	
+	// 创建一个位置索引数组，用于随机选择要变更的位置
+	positions := make([]int, len(runes))
+	for i := range positions {
+		positions[i] = i
+	}
+	
+	// 随机打乱位置数组
+	for i := len(positions) - 1; i > 0; i-- {
+		j := rand.Intn(i + 1)
+		positions[i], positions[j] = positions[j], positions[i]
+	}
+	
+	// 变更前changeCount个位置的字符
+	for i := 0; i < changeCount && i < len(positions); i++ {
+		pos := positions[i]
+		runes[pos] = rune(charset[rand.Intn(len(charset))])
 	}
 
 	return string(runes)
+}
+
+// ConvertToXMLRows 将测试用例转换为XML行格式（每行一个完整的XML）
+func ConvertToXMLRows(testCases []map[string]interface{}) [][]string {
+	if len(testCases) == 0 {
+		return [][]string{}
+	}
+
+	// 创建CSV数据，第一行是表头（只有一列：XML）
+	result := make([][]string, 0, len(testCases)+1)
+	// 添加表头
+	result = append(result, []string{"XML"})
+
+	// 填充数据行，每行包含一个完整的XML
+	for _, testCase := range testCases {
+		// 将测试用例转换为XML字符串
+		xmlData, err := convertMapToXML(testCase)
+		if err != nil {
+			// 如果转换失败，使用JSON作为备选
+			jsonData, _ := json.Marshal(testCase)
+			xmlData = string(jsonData)
+		}
+		
+		// 添加数据行（只有一列）
+		result = append(result, []string{xmlData})
+	}
+
+	return result
+}
+
+// convertMapToXML 将map转换为XML字符串
+func convertMapToXML(data map[string]interface{}) (string, error) {
+	var xmlBuilder strings.Builder
+	xmlBuilder.WriteString("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
+	
+	// 使用根元素包装所有字段
+	xmlBuilder.WriteString("<root>\n")
+	
+	// 使用保存的原始字段顺序
+	keys := originalKeyOrder
+	if len(keys) == 0 {
+		// 如果没有保存的顺序，则使用map的键
+		keys = make([]string, 0, len(data))
+		for key := range data {
+			keys = append(keys, key)
+		}
+	}
+	
+	for _, key := range keys {
+		value, exists := data[key]
+		if !exists {
+			continue
+		}
+		
+		// 清理XML标签名（移除特殊字符）
+		cleanKey := strings.ReplaceAll(key, " ", "_")
+		cleanKey = strings.ReplaceAll(cleanKey, "-", "_")
+		
+		xmlBuilder.WriteString(fmt.Sprintf("  <%s>", cleanKey))
+		
+		// 根据值的类型进行处理
+		switch v := value.(type) {
+		case string:
+			// 转义XML特殊字符
+			escapedValue := escapeXMLValue(v)
+			xmlBuilder.WriteString(escapedValue)
+		case map[string]interface{}:
+			// 嵌套对象，递归处理
+			xmlBuilder.WriteString("\n")
+			for nestedKey, nestedValue := range v {
+				cleanNestedKey := strings.ReplaceAll(nestedKey, " ", "_")
+				cleanNestedKey = strings.ReplaceAll(cleanNestedKey, "-", "_")
+				xmlBuilder.WriteString(fmt.Sprintf("    <%s>%v</%s>\n", cleanNestedKey, nestedValue, cleanNestedKey))
+			}
+			xmlBuilder.WriteString("  ")
+		case []interface{}:
+			// 数组，处理每个元素
+			xmlBuilder.WriteString("\n")
+			for _, item := range v {
+				xmlBuilder.WriteString(fmt.Sprintf("    <item>%v</item>\n", item))
+			}
+			xmlBuilder.WriteString("  ")
+		default:
+			// 其他类型直接转换为字符串
+			xmlBuilder.WriteString(fmt.Sprintf("%v", v))
+		}
+		
+		xmlBuilder.WriteString(fmt.Sprintf("</%s>\n", cleanKey))
+	}
+	
+	xmlBuilder.WriteString("</root>")
+	return xmlBuilder.String(), nil
+}
+
+// escapeXMLValue 转义XML特殊字符
+func escapeXMLValue(value string) string {
+	escaped := strings.ReplaceAll(value, "&", "&amp;")
+	escaped = strings.ReplaceAll(escaped, "<", "&lt;")
+	escaped = strings.ReplaceAll(escaped, ">", "&gt;")
+	escaped = strings.ReplaceAll(escaped, "\"", "&quot;")
+	escaped = strings.ReplaceAll(escaped, "'", "&apos;")
+	return escaped
+}
+
+// ConvertToJSONRows 将测试用例转换为单列JSON格式的CSV
+// 每行包含一个完整的JSON字符串
+func ConvertToJSONRows(testCases []map[string]interface{}) [][]string {
+	if len(testCases) == 0 {
+		return [][]string{}
+	}
+
+	// 创建CSV数据，第一行是表头
+	result := make([][]string, 0, len(testCases)+1)
+	// 添加表头（单列：JSON）
+	result = append(result, []string{"JSON"})
+
+	// 填充数据行
+	for _, testCase := range testCases {
+		// 将测试用例转换为JSON字符串
+		jsonData, err := json.Marshal(testCase)
+		if err != nil {
+			// 如果转换失败，使用空JSON对象
+			jsonData = []byte("{}")
+		}
+		
+		// 添加数据行（只有一列）
+		result = append(result, []string{string(jsonData)})
+	}
+
+	return result
 }
 
 // ConvertToCSV 将测试用例转换为CSV格式
@@ -664,8 +949,12 @@ func ConvertToCSV(testCases []map[string]interface{}) [][]string {
 						// 整数类型，确保输出为整数
 						switch v := value.(type) {
 						case float64:
+							// 将浮点数转换为整数（JSON解析可能将整数解析为float64）
+							row[j] = fmt.Sprintf("%.0f", v)
+							continue
+						case float32:
 							// 将浮点数转换为整数
-							row[j] = fmt.Sprintf("%d", int(v))
+							row[j] = fmt.Sprintf("%.0f", v)
 							continue
 						case int, int8, int16, int32, int64:
 							// 已经是整数

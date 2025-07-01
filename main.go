@@ -11,7 +11,7 @@ import (
 
 func main() {
 	// 显示欢迎信息
-	fmt.Println("API自动化测试命令行工具 (atc) v1.0.0")
+	fmt.Println("API自动化测试命令行工具 (atc) v0.0.1")
 	fmt.Println("使用 'atc --help' 获取更多信息")
 	fmt.Println()
 

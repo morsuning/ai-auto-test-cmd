@@ -73,8 +73,15 @@ var localGenCmd = &cobra.Command{
 		fmt.Println("正在生成测试用例...")
 		testCases := utils.GenerateTestCases(data, num)
 
-		// 转换为CSV格式
-		csvData := utils.ConvertToCSV(testCases)
+		// 根据格式转换数据
+		var csvData [][]string
+		if isXML {
+			// XML格式：每行一个完整的XML
+			csvData = utils.ConvertToXMLRows(testCases)
+		} else {
+			// JSON格式：每行一个完整的JSON
+			csvData = utils.ConvertToJSONRows(testCases)
+		}
 
 		// 保存到文件
 		err = utils.SaveToCSV(csvData, output)
