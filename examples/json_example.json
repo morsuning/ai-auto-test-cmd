@@ -1,0 +1,16 @@
+{
+  "name": "张三",
+  "age": 30,
+  "email": "zhangsan@example.com",
+  "phone": "13800138000",
+  "address": {
+    "city": "北京",
+    "street": "朝阳区建国路88号",
+    "postcode": "100022"
+  },
+  "tags": ["开发", "测试", "运维"],
+  "scores": [85, 92, 78],
+  "active": true,
+  "salary": 15000.50,
+  "hire_date": "2020-05-15"
+}

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<person>
+  <name>张三</name>
+  <age>30</age>
+  <email>zhangsan@example.com</email>
+  <phone>13800138000</phone>
+  <address>
+    <city>北京</city>
+    <street>朝阳区建国路88号</street>
+    <postcode>100022</postcode>
+  </address>
+  <tags>
+    <tag>开发</tag>
+    <tag>测试</tag>
+    <tag>运维</tag>
+  </tags>
+  <scores>
+    <score>85</score>
+    <score>92</score>
+    <score>78</score>
+  </scores>
+  <active>true</active>
+  <salary>15000.50</salary>
+  <hire_date>2020-05-15</hire_date>
+</person>
