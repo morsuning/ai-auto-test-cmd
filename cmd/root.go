@@ -1,7 +1,4 @@
-/*
-Copyright © 2025 API自动化测试命令行工具
-
-*/
+// Package cmd 提供API自动化测试命令行工具的命令实现
 package cmd
 
 import (
