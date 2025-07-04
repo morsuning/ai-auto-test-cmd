@@ -19,14 +19,45 @@ var localGenCmd = &cobra.Command{
   atc local-gen -xml -raw "xxxx" -n 10
 
   # 本地根据正例json报文生成15条测试用例
-  atc local-gen -json -raw "xxxx" -n 15`,
+  atc local-gen -json -raw "xxxx" -n 15
+
+  # 从XML文件读取正例报文生成测试用例
+  atc local-gen -xml -f example.xml -n 20
+
+  # 从JSON文件读取正例报文生成测试用例
+  atc local-gen -json -f example.json -n 25`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// 获取命令行参数
 		raw, _ := cmd.Flags().GetString("raw")
+		file, _ := cmd.Flags().GetString("file")
 		num, _ := cmd.Flags().GetInt("num")
 		isXML, _ := cmd.Flags().GetBool("xml")
 		isJSON, _ := cmd.Flags().GetBool("json")
 		output, _ := cmd.Flags().GetString("output")
+
+		// 检查输入方式：必须指定raw或file其中之一
+		if raw == "" && file == "" {
+			fmt.Println("错误: 必须指定正例输入方式（-raw 或 -f）")
+			return
+		}
+		if raw != "" && file != "" {
+			fmt.Println("错误: 不能同时指定 -raw 和 -f 参数")
+			return
+		}
+
+		// 如果指定了文件输入，读取文件内容
+		var inputContent string
+		if file != "" {
+			content, err := utils.ReadFileContent(file)
+			if err != nil {
+				fmt.Printf("读取文件失败: %v\n", err)
+				return
+			}
+			inputContent = content
+			fmt.Printf("从文件读取正例: %s\n", file)
+		} else {
+			inputContent = raw
+		}
 
 		// 设置默认输出文件
 		if output == "" {
@@ -36,7 +67,11 @@ var localGenCmd = &cobra.Command{
 		// 打印参数信息
 		fmt.Println("本地生成测试用例")
 		fmt.Printf("报文格式: %s\n", getFormatName(isXML, isJSON))
-		fmt.Printf("原始报文: %s\n", raw)
+		if file != "" {
+			fmt.Printf("输入文件: %s\n", file)
+		} else {
+			fmt.Printf("原始报文: %s\n", inputContent)
+		}
 		fmt.Printf("生成数量: %d\n", num)
 		fmt.Printf("输出文件: %s\n", output)
 
@@ -52,14 +87,14 @@ var localGenCmd = &cobra.Command{
 
 		if isXML {
 			// 解析XML
-			data, err = utils.ParseXML(raw)
+			data, err = utils.ParseXML(inputContent)
 			if err != nil {
 				fmt.Printf("解析XML失败: %v\n", err)
 				return
 			}
 		} else {
 			// 解析JSON
-			data, err = utils.ParseJSON(raw)
+			data, err = utils.ParseJSON(inputContent)
 			if err != nil {
 				fmt.Printf("解析JSON失败: %v\n", err)
 				return
@@ -95,12 +130,12 @@ func init() {
 	rootCmd.AddCommand(localGenCmd)
 
 	// 定义命令行参数
-	localGenCmd.Flags().StringP("raw", "r", "", "请求参数（正例报文）（必需）")
+	localGenCmd.Flags().StringP("raw", "r", "", "请求参数（正例报文）")
+	localGenCmd.Flags().StringP("file", "f", "", "正例报文文件路径")
 	localGenCmd.Flags().IntP("num", "n", 10, "生成用例数量（默认10）")
 	localGenCmd.Flags().BoolP("xml", "x", false, "使用XML格式")
 	localGenCmd.Flags().BoolP("json", "j", false, "使用JSON格式")
 	localGenCmd.Flags().StringP("output", "o", "", "输出文件路径（默认为当前目录下的test_cases.csv）")
 
-	// 标记必需的参数
-	localGenCmd.MarkFlagRequired("raw")
+	// 注意：raw和file参数互斥，在Run函数中进行验证
 }

@@ -70,3 +70,19 @@ func ReadCSV(filePath string) ([][]string, error) {
 
 	return records, nil
 }
+
+// ReadFileContent 读取文件内容并返回字符串
+func ReadFileContent(filePath string) (string, error) {
+	// 检查文件是否存在
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		return "", fmt.Errorf("文件不存在: %s", filePath)
+	}
+
+	// 读取文件内容
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", fmt.Errorf("读取文件失败: %v", err)
+	}
+
+	return string(content), nil
+}
