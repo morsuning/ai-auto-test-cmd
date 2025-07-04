@@ -6,9 +6,12 @@ package utils
 
 import (
 	"encoding/csv"
+	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // SaveToCSV 将数据保存为CSV文件
@@ -85,4 +88,69 @@ func ReadFileContent(filePath string) (string, error) {
 	}
 
 	return string(content), nil
+}
+
+// ValidateXMLFormat 验证字符串是否为有效的XML格式
+func ValidateXMLFormat(content string) error {
+	// 去除首尾空白字符
+	content = strings.TrimSpace(content)
+	
+	// 检查是否为空
+	if content == "" {
+		return fmt.Errorf("XML内容不能为空")
+	}
+	
+	// 尝试解析XML
+	var xmlData interface{}
+	err := xml.Unmarshal([]byte(content), &xmlData)
+	if err != nil {
+		return fmt.Errorf("无效的XML格式: %v", err)
+	}
+	
+	return nil
+}
+
+// ValidateJSONFormat 验证字符串是否为有效的JSON格式
+func ValidateJSONFormat(content string) error {
+	// 去除首尾空白字符
+	content = strings.TrimSpace(content)
+	
+	// 检查是否为空
+	if content == "" {
+		return fmt.Errorf("JSON内容不能为空")
+	}
+	
+	// 尝试解析JSON
+	var jsonData interface{}
+	err := json.Unmarshal([]byte(content), &jsonData)
+	if err != nil {
+		return fmt.Errorf("无效的JSON格式: %v", err)
+	}
+	
+	return nil
+}
+
+// ReadAndValidateFileContent 读取文件内容并根据指定格式进行验证
+func ReadAndValidateFileContent(filePath string, format string) (string, error) {
+	// 读取文件内容
+	content, err := ReadFileContent(filePath)
+	if err != nil {
+		return "", err
+	}
+	
+	// 根据格式进行验证
+	switch strings.ToLower(format) {
+	case "xml":
+		if err := ValidateXMLFormat(content); err != nil {
+			return "", fmt.Errorf("文件 %s 格式验证失败: %v", filePath, err)
+		}
+	case "json":
+		if err := ValidateJSONFormat(content); err != nil {
+			return "", fmt.Errorf("文件 %s 格式验证失败: %v", filePath, err)
+		}
+	default:
+		return "", fmt.Errorf("不支持的格式: %s，仅支持 xml 或 json", format)
+	}
+	
+	return content, nil
 }

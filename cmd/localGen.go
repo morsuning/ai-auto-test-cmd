@@ -45,17 +45,39 @@ var localGenCmd = &cobra.Command{
 			return
 		}
 
-		// 如果指定了文件输入，读取文件内容
+		// 确定输入格式
+		var format string
+		if isXML {
+			format = "xml"
+		} else if isJSON {
+			format = "json"
+		} else {
+			fmt.Println("错误: 必须指定报文格式（-xml 或 -json）")
+			return
+		}
+
+		// 如果指定了文件输入，读取并验证文件内容
 		var inputContent string
 		if file != "" {
-			content, err := utils.ReadFileContent(file)
+			content, err := utils.ReadAndValidateFileContent(file, format)
 			if err != nil {
-				fmt.Printf("读取文件失败: %v\n", err)
+				fmt.Printf("文件读取或格式验证失败: %v\n", err)
 				return
 			}
 			inputContent = content
-			fmt.Printf("从文件读取正例: %s\n", file)
+			fmt.Printf("从文件读取并验证正例: %s\n", file)
 		} else {
+			// 验证命令行输入的格式
+			var err error
+			if format == "xml" {
+				err = utils.ValidateXMLFormat(raw)
+			} else {
+				err = utils.ValidateJSONFormat(raw)
+			}
+			if err != nil {
+				fmt.Printf("输入格式验证失败: %v\n", err)
+				return
+			}
 			inputContent = raw
 		}
 
@@ -75,11 +97,7 @@ var localGenCmd = &cobra.Command{
 		fmt.Printf("生成数量: %d\n", num)
 		fmt.Printf("输出文件: %s\n", output)
 
-		// 检查报文格式
-		if !isXML && !isJSON {
-			fmt.Println("错误: 必须指定报文格式（XML或JSON）")
-			return
-		}
+
 
 		// 解析报文并生成测试用例
 		var data map[string]interface{}
