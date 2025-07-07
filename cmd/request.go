@@ -531,7 +531,7 @@ func printDebugInfo(requests []utils.HTTPRequest) {
 		fmt.Println()
 	}
 	
-	fmt.Println("=== 调试信息结束 ===\n")
+	fmt.Println("=== 调试信息结束 ===")
 }
 
 // printResponseDetails 打印响应详细信息（用于debug模式）
