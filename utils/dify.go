@@ -1,7 +1,5 @@
-/*
-Copyright © 2025 API自动化测试命令行工具
-
-*/
+// Package utils 提供了一系列用于数据处理和测试用例生成的工具函数。
+// 包含XML解析、JSON解析以及基于原始数据生成测试用例的功能。
 package utils
 
 import (

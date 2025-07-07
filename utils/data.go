@@ -1,7 +1,5 @@
-/*
-Copyright © 2025 API自动化测试命令行工具
-
-*/
+// Package utils 提供了一系列用于数据处理和测试用例生成的工具函数。
+// 包含XML解析、JSON解析以及基于原始数据生成测试用例的功能。
 package utils
 
 import (
@@ -20,6 +18,7 @@ import (
 // 保存原始字段顺序和类型信息
 var originalKeyOrder []string
 var originalValueTypes map[string]string
+var originalRootElementName string
 
 func init() {
 	// 初始化随机数生成器
@@ -32,6 +31,21 @@ func ParseXML(xmlStr string) (map[string]interface{}, error) {
 	result, err := XMLToMap(xmlStr)
 	if err != nil {
 		return nil, fmt.Errorf("解析XML失败: %v", err)
+	}
+	
+	// 提取原始根元素名称
+	// 跳过XML声明，找到第一个真正的元素
+	rootRegex := regexp.MustCompile(`<\?xml[^>]*>\s*<([^\s>/]+)[^>]*>`)
+	matches := rootRegex.FindStringSubmatch(xmlStr)
+	if len(matches) > 1 {
+		originalRootElementName = matches[1]
+	} else {
+		// 如果没有XML声明，直接查找第一个元素
+		simpleRegex := regexp.MustCompile(`<([^\s>/!?]+)[^>]*>`)
+		simpleMatches := simpleRegex.FindStringSubmatch(xmlStr)
+		if len(simpleMatches) > 1 && simpleMatches[1] != "?xml" {
+			originalRootElementName = simpleMatches[1]
+		}
 	}
 	
 	// 提取XML字段顺序
@@ -61,30 +75,35 @@ func ParseXML(xmlStr string) (map[string]interface{}, error) {
 
 // extractXMLKeys 从XML字符串中提取字段顺序
 func extractXMLKeys(xmlStr string) []string {
-	// 简单的XML解析，提取顶层元素
+	// 提取根元素内的子元素顺序
 	var keys []string
 	var seenKeys = make(map[string]bool)
 	
-	// 使用正则表达式提取标签
-	tagRegex := regexp.MustCompile(`<([^\s>/]+)[^>]*>([^<]*)</([^\s>/]+)>|<([^\s>/]+)[^>]*/>|<([^\s>/]+)[^>]*>`) 
+	// 简化的方法：直接查找所有标签，然后过滤出根元素内的子元素
+	// 使用正则表达式提取所有标签
+	tagRegex := regexp.MustCompile(`<([^\s>/!?]+)[^>]*>`)
 	matches := tagRegex.FindAllStringSubmatch(xmlStr, -1)
 	
-	for _, match := range matches {
-		var tagName string
-		if match[1] != "" {
-			tagName = match[1] // 完整标签 <tag>content</tag>
-		} else if match[4] != "" {
-			tagName = match[4] // 自闭合标签 <tag/>
-		} else if match[5] != "" {
-			tagName = match[5] // 开始标签 <tag>
+	if len(matches) == 0 {
+		return keys
+	}
+	
+	// 第一个匹配应该是根元素，跳过它
+	for i, match := range matches {
+		if i == 0 {
+			continue // 跳过根元素
 		}
 		
-		// 忽略XML声明和根元素
-		if tagName != "" && tagName != "?xml" && !strings.Contains(tagName, ":") {
-			// 避免重复添加
-			if !seenKeys[tagName] {
-				keys = append(keys, tagName)
-				seenKeys[tagName] = true
+		if len(match) > 1 {
+			tagName := match[1]
+			
+			// 忽略XML声明和命名空间
+			if tagName != "" && tagName != "?xml" && !strings.Contains(tagName, ":") {
+				// 避免重复添加
+				if !seenKeys[tagName] {
+					keys = append(keys, tagName)
+					seenKeys[tagName] = true
+				}
 			}
 		}
 	}
@@ -508,11 +527,16 @@ func extractJSONKeys(jsonStr string) []string {
 func GenerateTestCases(data map[string]interface{}, count int) []map[string]interface{} {
 	testCases := make([]map[string]interface{}, count)
 	
-	// 记录原始字段顺序
-	keys := make([]string, 0, len(data))
-	// 按照输入顺序记录字段
-	for key := range data {
-		keys = append(keys, key)
+	// 使用已经保存的原始字段顺序
+	keys := originalKeyOrder
+	if len(keys) == 0 {
+		// 如果没有保存的顺序，则从数据中提取（无序）
+		keys = make([]string, 0, len(data))
+		for key := range data {
+			keys = append(keys, key)
+		}
+		// 更新全局变量
+		originalKeyOrder = keys
 	}
 	
 	// 记录原始数据类型
@@ -568,8 +592,7 @@ func GenerateTestCases(data map[string]interface{}, count int) []map[string]inte
 		testCases[i] = testCase
 	}
 	
-	// 保存原始字段顺序和类型信息到全局变量
-	originalKeyOrder = keys
+	// 保存类型信息到全局变量（字段顺序已在ParseJSON中设置）
 	originalValueTypes = types
 	
 	return testCases
@@ -816,8 +839,12 @@ func convertMapToXML(data map[string]interface{}) (string, error) {
 	var xmlBuilder strings.Builder
 	xmlBuilder.WriteString("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
 	
-	// 使用根元素包装所有字段
-	xmlBuilder.WriteString("<root>\n")
+	// 使用保存的原始根元素名称，如果没有则使用默认的root
+	rootElement := originalRootElementName
+	if rootElement == "" {
+		rootElement = "root"
+	}
+	xmlBuilder.WriteString(fmt.Sprintf("<%s>\n", rootElement))
 	
 	// 使用保存的原始字段顺序
 	keys := originalKeyOrder
@@ -847,22 +874,80 @@ func convertMapToXML(data map[string]interface{}) (string, error) {
 			// 转义XML特殊字符
 			escapedValue := escapeXMLValue(v)
 			xmlBuilder.WriteString(escapedValue)
+		case int, int8, int16, int32, int64:
+			// 整数类型，直接输出数字
+			xmlBuilder.WriteString(fmt.Sprintf("%d", v))
+		case float32, float64:
+			// 浮点数类型，使用固定格式避免科学计数法
+			floatVal := reflect.ValueOf(v).Float()
+			// 检查是否是整数值的浮点数
+			if floatVal == math.Trunc(floatVal) && math.Abs(floatVal) < 1e15 {
+				// 如果是整数值且不太大，输出为整数格式
+				xmlBuilder.WriteString(fmt.Sprintf("%.0f", floatVal))
+			} else {
+				// 否则使用固定小数点格式
+				xmlBuilder.WriteString(strconv.FormatFloat(floatVal, 'f', -1, 64))
+			}
+		case bool:
+			xmlBuilder.WriteString(fmt.Sprintf("%t", v))
 		case map[string]interface{}:
 			// 嵌套对象，递归处理
 			xmlBuilder.WriteString("\n")
-			for nestedKey, nestedValue := range v {
+			// 使用原始字段顺序处理嵌套对象
+			nestedKeys := make([]string, 0, len(v))
+			for nestedKey := range v {
+				nestedKeys = append(nestedKeys, nestedKey)
+			}
+			for _, nestedKey := range nestedKeys {
+				nestedValue := v[nestedKey]
 				cleanNestedKey := strings.ReplaceAll(nestedKey, " ", "_")
 				cleanNestedKey = strings.ReplaceAll(cleanNestedKey, "-", "_")
-				xmlBuilder.WriteString(fmt.Sprintf("    <%s>%v</%s>\n", cleanNestedKey, nestedValue, cleanNestedKey))
+				// 递归处理嵌套值的格式
+				var valueStr string
+				switch nv := nestedValue.(type) {
+				case int, int8, int16, int32, int64:
+					valueStr = fmt.Sprintf("%d", nv)
+				case float32, float64:
+					floatVal := reflect.ValueOf(nv).Float()
+					if floatVal == math.Trunc(floatVal) && math.Abs(floatVal) < 1e15 {
+						valueStr = fmt.Sprintf("%.0f", floatVal)
+					} else {
+						valueStr = strconv.FormatFloat(floatVal, 'f', -1, 64)
+					}
+				case string:
+					valueStr = escapeXMLValue(nv)
+				default:
+					valueStr = fmt.Sprintf("%v", nv)
+				}
+				xmlBuilder.WriteString(fmt.Sprintf("    <%s>%s</%s>\n", cleanNestedKey, valueStr, cleanNestedKey))
 			}
 			xmlBuilder.WriteString("  ")
 		case []interface{}:
 			// 数组，处理每个元素
 			xmlBuilder.WriteString("\n")
 			for _, item := range v {
-				xmlBuilder.WriteString(fmt.Sprintf("    <item>%v</item>\n", item))
+				// 处理数组元素的格式
+				var itemStr string
+				switch iv := item.(type) {
+				case int, int8, int16, int32, int64:
+					itemStr = fmt.Sprintf("%d", iv)
+				case float32, float64:
+					floatVal := reflect.ValueOf(iv).Float()
+					if floatVal == math.Trunc(floatVal) && math.Abs(floatVal) < 1e15 {
+						itemStr = fmt.Sprintf("%.0f", floatVal)
+					} else {
+						itemStr = strconv.FormatFloat(floatVal, 'f', -1, 64)
+					}
+				case string:
+					itemStr = escapeXMLValue(iv)
+				default:
+					itemStr = fmt.Sprintf("%v", iv)
+				}
+				xmlBuilder.WriteString(fmt.Sprintf("    <item>%s</item>\n", itemStr))
 			}
 			xmlBuilder.WriteString("  ")
+		case nil:
+			xmlBuilder.WriteString("<nil>")
 		default:
 			// 其他类型直接转换为字符串
 			xmlBuilder.WriteString(fmt.Sprintf("%v", v))
@@ -871,7 +956,7 @@ func convertMapToXML(data map[string]interface{}) (string, error) {
 		xmlBuilder.WriteString(fmt.Sprintf("</%s>\n", cleanKey))
 	}
 	
-	xmlBuilder.WriteString("</root>")
+	xmlBuilder.WriteString(fmt.Sprintf("</%s>", rootElement))
 	return xmlBuilder.String(), nil
 }
 
@@ -883,6 +968,118 @@ func escapeXMLValue(value string) string {
 	escaped = strings.ReplaceAll(escaped, "\"", "&quot;")
 	escaped = strings.ReplaceAll(escaped, "'", "&apos;")
 	return escaped
+}
+
+// customJSONMarshal 自定义JSON序列化，保持大数值的原始格式
+// 避免将长数值转换为科学计数法
+func customJSONMarshal(data map[string]interface{}) (string, error) {
+	var result strings.Builder
+	result.WriteString("{")
+	
+	// 使用保存的原始字段顺序来序列化JSON
+	keys := originalKeyOrder
+	if len(keys) == 0 {
+		// 如果没有保存的顺序，则使用map的键（无序）
+		keys = make([]string, 0, len(data))
+		for key := range data {
+			keys = append(keys, key)
+		}
+	}
+	
+	first := true
+	for _, key := range keys {
+		// 检查键是否存在于数据中
+		value, exists := data[key]
+		if !exists {
+			continue
+		}
+		
+		if !first {
+			result.WriteString(",")
+		}
+		first = false
+		
+		// 写入键
+		result.WriteString(fmt.Sprintf(`"%s":`, key))
+		
+		// 根据值的类型进行处理
+		switch v := value.(type) {
+		case string:
+			// 字符串需要转义和加引号
+			escaped := strings.ReplaceAll(v, "\\", "\\\\")
+			escaped = strings.ReplaceAll(escaped, "\"", "\\\"")
+			result.WriteString(fmt.Sprintf(`"%s"`, escaped))
+		case int, int8, int16, int32, int64:
+			// 整数类型，直接输出数字
+			result.WriteString(fmt.Sprintf("%d", v))
+		case float32, float64:
+			// 浮点数类型，使用固定格式避免科学计数法
+			floatVal := reflect.ValueOf(v).Float()
+			// 检查是否是整数值的浮点数
+			if floatVal == math.Trunc(floatVal) && math.Abs(floatVal) < 1e15 {
+				// 如果是整数值且不太大，输出为整数格式
+				result.WriteString(fmt.Sprintf("%.0f", floatVal))
+			} else {
+				// 否则使用固定小数点格式
+				result.WriteString(strconv.FormatFloat(floatVal, 'f', -1, 64))
+			}
+		case bool:
+			result.WriteString(fmt.Sprintf("%t", v))
+		case []interface{}:
+			// 数组处理
+			result.WriteString("[")
+			for i, item := range v {
+				if i > 0 {
+					result.WriteString(",")
+				}
+				// 递归处理数组元素
+				switch itemVal := item.(type) {
+				case string:
+					escaped := strings.ReplaceAll(itemVal, "\\", "\\\\")
+					escaped = strings.ReplaceAll(escaped, "\"", "\\\"")
+					result.WriteString(fmt.Sprintf(`"%s"`, escaped))
+				case int, int8, int16, int32, int64:
+					result.WriteString(fmt.Sprintf("%d", itemVal))
+				case float32, float64:
+					floatVal := reflect.ValueOf(itemVal).Float()
+					if floatVal == math.Trunc(floatVal) && math.Abs(floatVal) < 1e15 {
+						result.WriteString(fmt.Sprintf("%.0f", floatVal))
+					} else {
+						result.WriteString(strconv.FormatFloat(floatVal, 'f', -1, 64))
+					}
+				case bool:
+					result.WriteString(fmt.Sprintf("%t", itemVal))
+				default:
+					// 对于复杂类型，回退到标准JSON序列化
+					if jsonBytes, err := json.Marshal(itemVal); err == nil {
+						result.WriteString(string(jsonBytes))
+					} else {
+						result.WriteString("null")
+					}
+				}
+			}
+			result.WriteString("]")
+		case map[string]interface{}:
+			// 嵌套对象，递归处理
+			if nestedJSON, err := customJSONMarshal(v); err == nil {
+				result.WriteString(nestedJSON)
+			} else {
+				result.WriteString("{}")
+			}
+		case nil:
+			result.WriteString("null")
+		default:
+			// 对于其他类型，回退到标准JSON序列化
+			if jsonBytes, err := json.Marshal(v); err == nil {
+				result.WriteString(string(jsonBytes))
+			} else {
+				result.WriteString("null")
+			}
+		}
+	}
+	
+	result.WriteString("}")
+	return result.String(), nil
 }
 
 // ConvertToJSONRows 将测试用例转换为单列JSON格式的CSV
@@ -899,15 +1096,15 @@ func ConvertToJSONRows(testCases []map[string]interface{}) [][]string {
 
 	// 填充数据行
 	for _, testCase := range testCases {
-		// 将测试用例转换为JSON字符串
-		jsonData, err := json.Marshal(testCase)
+		// 使用自定义JSON序列化来保持数值格式
+		jsonStr, err := customJSONMarshal(testCase)
 		if err != nil {
 			// 如果转换失败，使用空JSON对象
-			jsonData = []byte("{}")
+			jsonStr = "{}"
 		}
 		
 		// 添加数据行（只有一列）
-		result = append(result, []string{string(jsonData)})
+		result = append(result, []string{jsonStr})
 	}
 
 	return result
