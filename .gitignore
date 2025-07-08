@@ -61,3 +61,6 @@ coverage.out
 
 # Go mod cache
 $GOPATH/pkg/mod/
+
+# Docs directory
+docs
