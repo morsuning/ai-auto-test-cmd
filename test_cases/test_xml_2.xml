@@ -1,0 +1,12 @@
+<user>
+  <profile>
+    <name>张三</name>
+    <age>25</age>
+    <email>zhangsan@example.com</email>
+  </profile>
+  <preferences>
+    <language>zh-CN</language>
+    <theme>dark</theme>
+    <notifications>true</notifications>
+  </preferences>
+</user>

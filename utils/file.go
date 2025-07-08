@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -96,6 +97,20 @@ func ValidateXMLFormat(content string) error {
 	// 检查是否为空
 	if content == "" {
 		return fmt.Errorf("XML内容不能为空")
+	}
+
+	// 如果XML声明中包含非UTF-8编码，先将其转换为UTF-8
+	if strings.Contains(content, "encoding=") {
+		// 提取编码信息
+		encodingRegex := regexp.MustCompile(`encoding=["']([^"']+)["']`)
+		matches := encodingRegex.FindStringSubmatch(content)
+		if len(matches) > 1 {
+			encoding := strings.ToUpper(matches[1])
+			// 如果不是UTF-8编码，将XML声明中的编码改为UTF-8
+			if encoding != "UTF-8" {
+				content = encodingRegex.ReplaceAllString(content, `encoding="UTF-8"`)
+			}
+		}
 	}
 
 	// 尝试解析XML

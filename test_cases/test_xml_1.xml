@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<order>
+  <header>
+    <orderId>12345</orderId>
+    <timestamp>2024-01-01T10:00:00Z</timestamp>
+  </header>
+  <items>
+    <item>
+      <productId>P001</productId>
+      <quantity>2</quantity>
+      <price>99.99</price>
+    </item>
+    <item>
+      <productId>P002</productId>
+      <quantity>1</quantity>
+      <price>149.50</price>
+    </item>
+  </items>
+  <total>349.48</total>
+</order>

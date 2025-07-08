@@ -1,0 +1,17 @@
+{
+  "user": {
+    "id": 12345,
+    "name": "王五",
+    "email": "wangwu@example.com",
+    "age": 30,
+    "active": true,
+    "balance": 2500.50,
+    "tags": ["VIP", "Premium"],
+    "address": {
+      "street": "中山路123号",
+      "city": "北京",
+      "zipcode": "100000"
+    }
+  },
+  "timestamp": "2024-01-01T12:00:00Z"
+}

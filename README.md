@@ -312,6 +312,30 @@ The system automatically adjusts concurrency based on the number of test cases, 
 - Precise error location identification
 - User-friendly prompts
 
+### XML Encoding Support
+
+**Important Note**: Go's standard library XML processing package (`encoding/xml`) has limitations regarding XML document encoding:
+
+- **UTF-8 Only**: The standard library can only correctly parse UTF-8 encoded XML documents
+- **Other Encodings Not Supported**: XML documents with GBK, GB2312, ISO-8859-1, or other non-UTF-8 encodings cannot be directly processed by the standard library
+- **Encoding Declaration Ignored**: Even if an XML document declares `<?xml version="1.0" encoding="GBK"?>`, the standard library will still process it as UTF-8
+
+**ATC's Solution**:
+
+1. **Automatic Encoding Detection**: Uses `golang.org/x/text/encoding` package to detect the actual encoding of XML documents
+2. **Encoding Conversion**: Automatically converts non-UTF-8 encoded XML documents to UTF-8 before parsing
+3. **Supported Encoding Formats**:
+   - UTF-8 (native support)
+   - GBK/GB2312 (Chinese encoding)
+   - ISO-8859-1 (Western European encoding)
+   - Other common encoding formats
+
+**Usage Recommendations**:
+
+- **Prefer UTF-8 Encoding**: For optimal performance and compatibility, use UTF-8 encoded XML documents
+- **Non-UTF-8 Encoding Handling**: The tool automatically handles non-UTF-8 encodings, but there may be slight performance overhead
+- **Encoding Declaration Consistency**: Ensure XML document encoding declarations match the actual file encoding to avoid parsing errors
+
 ## 📊 Example Project
 
 The `examples/` directory contains complete usage examples:

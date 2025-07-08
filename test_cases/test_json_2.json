@@ -1,0 +1,1 @@
+{"order":{"id":"ORD-2024-001","items":[{"productId":"P001","name":"笔记本电脑","price":5999.99,"quantity":1},{"productId":"P002","name":"鼠标","price":99.99,"quantity":2}],"total":6199.97,"status":"pending","customer":{"name":"赵六","phone":"13800138000"}}}

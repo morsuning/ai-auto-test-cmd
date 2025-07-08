@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="GBK"?>
+<response>
+  <status>success</status>
+  <data>
+    <userId>1001</userId>
+    <userName>李四</userName>
+    <balance>1500.75</balance>
+  </data>
+  <message>操作成功</message>
+</response>

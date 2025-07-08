@@ -10,6 +10,7 @@ import (
 	"math/rand"
 	"reflect"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -19,6 +20,8 @@ import (
 var originalKeyOrder []string
 var originalValueTypes map[string]string
 var originalRootElementName string
+var originalHasXMLDeclaration bool
+var originalXMLDeclaration string
 
 func init() {
 	// 初始化随机数生成器
@@ -27,12 +30,38 @@ func init() {
 
 // ParseXML 解析XML字符串为map[string]any
 func ParseXML(xmlStr string) (map[string]any, error) {
+	// 检测原始XML是否包含XML声明
+	originalHasXMLDeclaration = strings.Contains(xmlStr, "<?xml")
+
+	// 保存原始的XML声明
+	if originalHasXMLDeclaration {
+		xmlDeclRegex := regexp.MustCompile(`<\?xml[^>]*\?>`)
+		matches := xmlDeclRegex.FindString(xmlStr)
+		if matches != "" {
+			originalXMLDeclaration = matches
+		}
+	}
+
+	// 如果XML声明中包含非UTF-8编码，先将其转换为UTF-8以便解析
+	processedXML := xmlStr
+	if strings.Contains(xmlStr, "encoding=") {
+		encodingRegex := regexp.MustCompile(`encoding=["']([^"']+)["']`)
+		matches := encodingRegex.FindStringSubmatch(xmlStr)
+		if len(matches) > 1 {
+			encoding := strings.ToUpper(matches[1])
+			// 如果不是UTF-8编码，将XML声明中的编码改为UTF-8以便解析
+			if encoding != "UTF-8" {
+				processedXML = encodingRegex.ReplaceAllString(xmlStr, `encoding="UTF-8"`)
+			}
+		}
+	}
+
 	// 使用自定义的XML解析函数
-	result, err := XMLToMap(xmlStr)
+	result, err := XMLToMap(processedXML)
 	if err != nil {
 		return nil, fmt.Errorf("解析XML失败: %v", err)
 	}
-
+	
 	// 提取原始根元素名称
 	// 跳过XML声明，找到第一个真正的元素
 	rootRegex := regexp.MustCompile(`<\?xml[^>]*>\s*<([^\s>/]+)[^>]*>`)
@@ -75,36 +104,107 @@ func ParseXML(xmlStr string) (map[string]any, error) {
 
 // extractXMLKeys 从XML字符串中提取字段顺序
 func extractXMLKeys(xmlStr string) []string {
-	// 提取根元素内的子元素顺序
+	// 提取根元素内的直接子元素顺序
 	var keys []string
 	var seenKeys = make(map[string]bool)
 
-	// 简化的方法：直接查找所有标签，然后过滤出根元素内的子元素
-	// 使用正则表达式提取所有标签
-	tagRegex := regexp.MustCompile(`<([^\s>/!?]+)[^>]*>`)
-	matches := tagRegex.FindAllStringSubmatch(xmlStr, -1)
+	// 首先找到根元素
+	rootRegex := regexp.MustCompile(`<\?xml[^>]*>\s*<([^\s>/]+)[^>]*>|^\s*<([^\s>/!?]+)[^>]*>`)
+	rootMatches := rootRegex.FindStringSubmatch(xmlStr)
+	var rootElement string
+	if len(rootMatches) > 1 {
+		if rootMatches[1] != "" {
+			rootElement = rootMatches[1]
+		} else if rootMatches[2] != "" {
+			rootElement = rootMatches[2]
+		}
+	}
 
-	if len(matches) == 0 {
+	if rootElement == "" {
 		return keys
 	}
 
-	// 第一个匹配应该是根元素，跳过它
-	for i, match := range matches {
-		if i == 0 {
-			continue // 跳过根元素
+	// 找到根元素的开始和结束位置
+	rootStartRegex := regexp.MustCompile(fmt.Sprintf(`<%s[^>]*>`, regexp.QuoteMeta(rootElement)))
+	rootEndRegex := regexp.MustCompile(fmt.Sprintf(`</%s>`, regexp.QuoteMeta(rootElement)))
+	
+	startMatch := rootStartRegex.FindStringIndex(xmlStr)
+	endMatch := rootEndRegex.FindStringIndex(xmlStr)
+	
+	if startMatch == nil || endMatch == nil {
+		return keys
+	}
+
+	// 提取根元素内容
+	rootContent := xmlStr[startMatch[1]:endMatch[0]]
+
+	// 解析根元素的直接子元素，避免嵌套元素
+	pos := 0
+	for pos < len(rootContent) {
+		// 跳过空白字符
+		for pos < len(rootContent) && (rootContent[pos] == ' ' || rootContent[pos] == '\n' || rootContent[pos] == '\t' || rootContent[pos] == '\r') {
+			pos++
 		}
-
-		if len(match) > 1 {
-			tagName := match[1]
-
-			// 忽略XML声明和命名空间
-			if tagName != "" && tagName != "?xml" && !strings.Contains(tagName, ":") {
-				// 避免重复添加
-				if !seenKeys[tagName] {
-					keys = append(keys, tagName)
-					seenKeys[tagName] = true
-				}
+		
+		if pos >= len(rootContent) {
+			break
+		}
+		
+		// 查找下一个开始标签
+		if rootContent[pos] == '<' {
+			// 提取标签名
+			tagStart := pos + 1
+			tagEnd := tagStart
+			
+			// 找到标签名的结束位置
+			for tagEnd < len(rootContent) && rootContent[tagEnd] != ' ' && rootContent[tagEnd] != '>' && rootContent[tagEnd] != '/' {
+				tagEnd++
 			}
+			
+			if tagEnd > tagStart {
+				tagName := rootContent[tagStart:tagEnd]
+				
+				// 忽略结束标签
+				if !strings.HasPrefix(tagName, "/") && tagName != "" {
+					// 避免重复添加
+					if !seenKeys[tagName] {
+						keys = append(keys, tagName)
+						seenKeys[tagName] = true
+					}
+					
+					// 跳过整个元素（包括其内容和结束标签）
+					if pos+1 < len(rootContent) && rootContent[pos+1] != '/' {
+						// 不是自闭合标签，需要找到对应的结束标签
+						endTagPattern := fmt.Sprintf("</%s>", tagName)
+						endTagPos := strings.Index(rootContent[pos:], endTagPattern)
+						if endTagPos != -1 {
+							pos += endTagPos + len(endTagPattern)
+						} else {
+							// 可能是自闭合标签，跳到下一个 >
+							for pos < len(rootContent) && rootContent[pos] != '>' {
+								pos++
+							}
+							pos++
+						}
+					} else {
+						// 自闭合标签，跳到下一个 >
+						for pos < len(rootContent) && rootContent[pos] != '>' {
+							pos++
+						}
+						pos++
+					}
+				} else {
+					// 结束标签，跳过
+					for pos < len(rootContent) && rootContent[pos] != '>' {
+						pos++
+					}
+					pos++
+				}
+			} else {
+				pos++
+			}
+		} else {
+			pos++
 		}
 	}
 
@@ -138,7 +238,7 @@ func XMLToMap(xmlStr string) (map[string]any, error) {
 	return simplifyXMLMap(result), nil
 }
 
-// simplifyXMLMap 简化XML转换后的map结构，提取实际内容
+// simplifyXMLMap 简化XML转换后的map结构，保持嵌套层次
 func simplifyXMLMap(data map[string]any) map[string]any {
 	result := make(map[string]any)
 
@@ -155,32 +255,39 @@ func simplifyXMLMap(data map[string]any) map[string]any {
 				// 尝试将内容转换为数值类型
 				strContent, isStr := content.(string)
 				if isStr {
-					// 尝试转换为整数
-					if intVal, err := strconv.ParseInt(strContent, 10, 64); err == nil {
-						result[key] = intVal
-						continue
+					strContent = strings.TrimSpace(strContent)
+					if strContent != "" {
+						// 尝试转换为整数
+						if intVal, err := strconv.ParseInt(strContent, 10, 64); err == nil {
+							result[key] = intVal
+							continue
+						}
+						// 尝试转换为浮点数
+						if floatVal, err := strconv.ParseFloat(strContent, 64); err == nil {
+							result[key] = floatVal
+							continue
+						}
+						// 尝试转换为布尔值
+						if boolVal, err := strconv.ParseBool(strContent); err == nil {
+							result[key] = boolVal
+							continue
+						}
+						// 保持为字符串
+						result[key] = strContent
+					} else {
+						// 空内容，表示空元素
+						result[key] = nil
 					}
-					// 尝试转换为浮点数
-					if floatVal, err := strconv.ParseFloat(strContent, 64); err == nil {
-						result[key] = floatVal
-						continue
-					}
-					// 尝试转换为布尔值
-					if boolVal, err := strconv.ParseBool(strContent); err == nil {
-						result[key] = boolVal
-						continue
-					}
+				} else {
+					result[key] = content
 				}
-				result[key] = content
 			} else if len(v) == 1 && v["_name"] != nil {
-				// 空节点，跳过
-				continue
+				// 空节点（自闭合标签）
+				result[key] = nil
 			} else {
-				// 递归处理子节点
+				// 递归处理子节点，保持嵌套结构
 				simplified := simplifyXMLMap(v)
-				if len(simplified) > 0 {
-					result[key] = simplified
-				}
+				result[key] = simplified
 			}
 		case []any:
 			// 处理数组
@@ -192,37 +299,40 @@ func simplifyXMLMap(data map[string]any) map[string]any {
 						// 尝试将内容转换为数值类型
 						strContent, isStr := content.(string)
 						if isStr {
-							// 尝试转换为整数
-							if intVal, err := strconv.ParseInt(strContent, 10, 64); err == nil {
-								array = append(array, intVal)
-								continue
+							strContent = strings.TrimSpace(strContent)
+							if strContent != "" {
+								// 尝试转换为整数
+								if intVal, err := strconv.ParseInt(strContent, 10, 64); err == nil {
+									array = append(array, intVal)
+									continue
+								}
+								// 尝试转换为浮点数
+								if floatVal, err := strconv.ParseFloat(strContent, 64); err == nil {
+									array = append(array, floatVal)
+									continue
+								}
+								// 尝试转换为布尔值
+								if boolVal, err := strconv.ParseBool(strContent); err == nil {
+									array = append(array, boolVal)
+									continue
+								}
+								array = append(array, strContent)
+							} else {
+								array = append(array, nil)
 							}
-							// 尝试转换为浮点数
-							if floatVal, err := strconv.ParseFloat(strContent, 64); err == nil {
-								array = append(array, floatVal)
-								continue
-							}
-							// 尝试转换为布尔值
-							if boolVal, err := strconv.ParseBool(strContent); err == nil {
-								array = append(array, boolVal)
-								continue
-							}
+						} else {
+							array = append(array, content)
 						}
-						array = append(array, content)
 					} else {
 						// 递归处理复杂节点
 						simplified := simplifyXMLMap(mapItem)
-						if len(simplified) > 0 {
-							array = append(array, simplified)
-						}
+						array = append(array, simplified)
 					}
 				} else if item != nil {
 					array = append(array, item)
 				}
 			}
-			if len(array) > 0 {
-				result[key] = array
-			}
+			result[key] = array
 		default:
 			if v != nil {
 				result[key] = v
@@ -853,128 +963,152 @@ func ConvertToXMLRows(testCases []map[string]any) [][]string {
 // convertMapToXML 将map转换为XML字符串
 func convertMapToXML(data map[string]any) (string, error) {
 	var xmlBuilder strings.Builder
-	xmlBuilder.WriteString("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
+	
+	// 只有当原始XML包含XML声明时才添加XML声明
+	if originalHasXMLDeclaration {
+		if originalXMLDeclaration != "" {
+			// 使用保存的原始XML声明
+			xmlBuilder.WriteString(originalXMLDeclaration + "\n")
+		} else {
+			// 如果没有保存的声明，使用默认的UTF-8声明
+			xmlBuilder.WriteString("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
+		}
+	}
 
 	// 使用保存的原始根元素名称，如果没有则使用默认的root
 	rootElement := originalRootElementName
 	if rootElement == "" {
 		rootElement = "root"
 	}
-	xmlBuilder.WriteString(fmt.Sprintf("<%s>\n", rootElement))
-
-	// 使用保存的原始字段顺序
-	keys := originalKeyOrder
-	if len(keys) == 0 {
-		// 如果没有保存的顺序，则使用map的键
-		keys = make([]string, 0, len(data))
-		for key := range data {
-			keys = append(keys, key)
-		}
+	
+	// 构建XML内容
+	xmlContent := buildXMLContent(data, "")
+	
+	// 如果内容为空，使用自闭合标签
+	if strings.TrimSpace(xmlContent) == "" {
+		xmlBuilder.WriteString(fmt.Sprintf("<%s />", rootElement))
+	} else {
+		xmlBuilder.WriteString(fmt.Sprintf("<%s>%s</%s>", rootElement, xmlContent, rootElement))
 	}
+	
+	return xmlBuilder.String(), nil
+}
 
+// buildXMLContent 递归构建XML内容
+func buildXMLContent(data map[string]any, indent string) string {
+	var xmlBuilder strings.Builder
+	
+	// 对于嵌套结构，不使用全局的originalKeyOrder，而是使用当前map的键
+	keys := make([]string, 0, len(data))
+	for key := range data {
+		keys = append(keys, key)
+	}
+	
+	// 如果是根级别且有保存的顺序，则使用保存的顺序
+	if indent == "" && len(originalKeyOrder) > 0 {
+		keys = originalKeyOrder
+	}
+	
+	hasContent := false
 	for _, key := range keys {
 		value, exists := data[key]
 		if !exists {
 			continue
+		}
+		
+		if !hasContent {
+			xmlBuilder.WriteString(" ")
+			hasContent = true
 		}
 
 		// 清理XML标签名（移除特殊字符）
 		cleanKey := strings.ReplaceAll(key, " ", "_")
 		cleanKey = strings.ReplaceAll(cleanKey, "-", "_")
 
-		xmlBuilder.WriteString(fmt.Sprintf("  <%s>", cleanKey))
-
 		// 根据值的类型进行处理
 		switch v := value.(type) {
+		case nil:
+			// 空元素，使用自闭合标签
+			xmlBuilder.WriteString(fmt.Sprintf("<%s />", cleanKey))
 		case string:
 			// 转义XML特殊字符
 			escapedValue := escapeXMLValue(v)
-			xmlBuilder.WriteString(escapedValue)
+			xmlBuilder.WriteString(fmt.Sprintf("<%s>%s</%s>", cleanKey, escapedValue, cleanKey))
 		case int, int8, int16, int32, int64:
 			// 整数类型，直接输出数字
-			xmlBuilder.WriteString(fmt.Sprintf("%d", v))
+			xmlBuilder.WriteString(fmt.Sprintf("<%s>%d</%s>", cleanKey, v, cleanKey))
 		case float32, float64:
 			// 浮点数类型，使用固定格式避免科学计数法
 			floatVal := reflect.ValueOf(v).Float()
 			// 检查是否是整数值的浮点数
 			if floatVal == math.Trunc(floatVal) && math.Abs(floatVal) < 1e15 {
 				// 如果是整数值且不太大，输出为整数格式
-				xmlBuilder.WriteString(fmt.Sprintf("%.0f", floatVal))
+				xmlBuilder.WriteString(fmt.Sprintf("<%s>%.0f</%s>", cleanKey, floatVal, cleanKey))
 			} else {
 				// 否则使用固定小数点格式
-				xmlBuilder.WriteString(strconv.FormatFloat(floatVal, 'f', -1, 64))
+				xmlBuilder.WriteString(fmt.Sprintf("<%s>%s</%s>", cleanKey, strconv.FormatFloat(floatVal, 'f', -1, 64), cleanKey))
 			}
 		case bool:
-			xmlBuilder.WriteString(fmt.Sprintf("%t", v))
+			xmlBuilder.WriteString(fmt.Sprintf("<%s>%t</%s>", cleanKey, v, cleanKey))
 		case map[string]any:
 			// 嵌套对象，递归处理
-			xmlBuilder.WriteString("\n")
-			// 使用原始字段顺序处理嵌套对象
-			nestedKeys := make([]string, 0, len(v))
-			for nestedKey := range v {
-				nestedKeys = append(nestedKeys, nestedKey)
+			nestedContent := buildXMLContent(v, indent+"  ")
+			if strings.TrimSpace(nestedContent) == "" {
+				// 空的嵌套对象，使用自闭合标签
+				xmlBuilder.WriteString(fmt.Sprintf("<%s />", cleanKey))
+			} else {
+				xmlBuilder.WriteString(fmt.Sprintf("<%s>%s</%s>", cleanKey, nestedContent, cleanKey))
 			}
-			for _, nestedKey := range nestedKeys {
-				nestedValue := v[nestedKey]
-				cleanNestedKey := strings.ReplaceAll(nestedKey, " ", "_")
-				cleanNestedKey = strings.ReplaceAll(cleanNestedKey, "-", "_")
-				// 递归处理嵌套值的格式
-				var valueStr string
-				switch nv := nestedValue.(type) {
-				case int, int8, int16, int32, int64:
-					valueStr = fmt.Sprintf("%d", nv)
-				case float32, float64:
-					floatVal := reflect.ValueOf(nv).Float()
-					if floatVal == math.Trunc(floatVal) && math.Abs(floatVal) < 1e15 {
-						valueStr = fmt.Sprintf("%.0f", floatVal)
-					} else {
-						valueStr = strconv.FormatFloat(floatVal, 'f', -1, 64)
-					}
-				case string:
-					valueStr = escapeXMLValue(nv)
-				default:
-					valueStr = fmt.Sprintf("%v", nv)
-				}
-				xmlBuilder.WriteString(fmt.Sprintf("    <%s>%s</%s>\n", cleanNestedKey, valueStr, cleanNestedKey))
-			}
-			xmlBuilder.WriteString("  ")
 		case []any:
 			// 数组，处理每个元素
-			xmlBuilder.WriteString("\n")
 			for _, item := range v {
 				// 处理数组元素的格式
-				var itemStr string
 				switch iv := item.(type) {
 				case int, int8, int16, int32, int64:
-					itemStr = fmt.Sprintf("%d", iv)
+					itemStr := fmt.Sprintf("%d", iv)
+					xmlBuilder.WriteString(fmt.Sprintf("<%s>%s</%s>", cleanKey, itemStr, cleanKey))
 				case float32, float64:
 					floatVal := reflect.ValueOf(iv).Float()
+					var itemStr string
 					if floatVal == math.Trunc(floatVal) && math.Abs(floatVal) < 1e15 {
 						itemStr = fmt.Sprintf("%.0f", floatVal)
 					} else {
 						itemStr = strconv.FormatFloat(floatVal, 'f', -1, 64)
 					}
+					xmlBuilder.WriteString(fmt.Sprintf("<%s>%s</%s>", cleanKey, itemStr, cleanKey))
 				case string:
-					itemStr = escapeXMLValue(iv)
+					itemStr := escapeXMLValue(iv)
+					xmlBuilder.WriteString(fmt.Sprintf("<%s>%s</%s>", cleanKey, itemStr, cleanKey))
+				case bool:
+					itemStr := fmt.Sprintf("%t", iv)
+					xmlBuilder.WriteString(fmt.Sprintf("<%s>%s</%s>", cleanKey, itemStr, cleanKey))
+				case map[string]any:
+					// 嵌套对象，递归处理
+					nestedContent := buildXMLContent(iv, indent+"  ")
+					if strings.TrimSpace(nestedContent) == "" {
+						// 空的嵌套对象，使用自闭合标签
+						xmlBuilder.WriteString(fmt.Sprintf("<%s />", cleanKey))
+					} else {
+						xmlBuilder.WriteString(fmt.Sprintf("<%s>%s</%s>", cleanKey, nestedContent, cleanKey))
+					}
+				case nil:
+					// 空元素
+					xmlBuilder.WriteString(fmt.Sprintf("<%s />", cleanKey))
 				default:
-					itemStr = fmt.Sprintf("%v", iv)
+					itemStr := fmt.Sprintf("%v", iv)
+					xmlBuilder.WriteString(fmt.Sprintf("<%s>%s</%s>", cleanKey, itemStr, cleanKey))
 				}
-				xmlBuilder.WriteString(fmt.Sprintf("    <item>%s</item>\n", itemStr))
 			}
-			xmlBuilder.WriteString("  ")
-		case nil:
-			xmlBuilder.WriteString("<nil>")
 		default:
 			// 其他类型直接转换为字符串
-			xmlBuilder.WriteString(fmt.Sprintf("%v", v))
+			xmlBuilder.WriteString(fmt.Sprintf("<%s>%v</%s>", cleanKey, v, cleanKey))
 		}
-
-		xmlBuilder.WriteString(fmt.Sprintf("</%s>\n", cleanKey))
 	}
-
-	xmlBuilder.WriteString(fmt.Sprintf("</%s>", rootElement))
-	return xmlBuilder.String(), nil
+	
+	return xmlBuilder.String()
 }
+
+
 
 // escapeXMLValue 转义XML特殊字符
 func escapeXMLValue(value string) string {
@@ -1077,11 +1211,72 @@ func customJSONMarshal(data map[string]any) (string, error) {
 			result.WriteString("]")
 		case map[string]any:
 			// 嵌套对象，递归处理
-			if nestedJSON, err := customJSONMarshal(v); err == nil {
-				result.WriteString(nestedJSON)
-			} else {
-				result.WriteString("{}")
+			result.WriteString("{")
+			// 获取嵌套对象的键
+			nestedKeys := make([]string, 0, len(v))
+			for nestedKey := range v {
+				nestedKeys = append(nestedKeys, nestedKey)
 			}
+			// 对键进行排序以保证一致性
+			sort.Strings(nestedKeys)
+			
+			firstNested := true
+			for _, nestedKey := range nestedKeys {
+				nestedValue := v[nestedKey]
+				if !firstNested {
+					result.WriteString(",")
+				}
+				firstNested = false
+				
+				// 写入嵌套键
+				result.WriteString(fmt.Sprintf(`"%s":`, nestedKey))
+				
+				// 处理嵌套值
+				switch nestedVal := nestedValue.(type) {
+				case string:
+					escaped := strings.ReplaceAll(nestedVal, "\\", "\\\\")
+					escaped = strings.ReplaceAll(escaped, "\"", "\\\"")
+					result.WriteString(fmt.Sprintf(`"%s"`, escaped))
+				case int, int8, int16, int32, int64:
+					result.WriteString(fmt.Sprintf("%d", nestedVal))
+				case float32, float64:
+					floatVal := reflect.ValueOf(nestedVal).Float()
+					if floatVal == math.Trunc(floatVal) && math.Abs(floatVal) < 1e15 {
+						result.WriteString(fmt.Sprintf("%.0f", floatVal))
+					} else {
+						result.WriteString(strconv.FormatFloat(floatVal, 'f', -1, 64))
+					}
+				case bool:
+					result.WriteString(fmt.Sprintf("%t", nestedVal))
+				case []any:
+					result.WriteString("[")
+					for i, arrayItem := range nestedVal {
+						if i > 0 {
+							result.WriteString(",")
+						}
+						if jsonBytes, err := json.Marshal(arrayItem); err == nil {
+							result.WriteString(string(jsonBytes))
+						} else {
+							result.WriteString("null")
+						}
+					}
+					result.WriteString("]")
+				case map[string]any:
+					// 更深层的嵌套，使用标准JSON序列化
+					if jsonBytes, err := json.Marshal(nestedVal); err == nil {
+						result.WriteString(string(jsonBytes))
+					} else {
+						result.WriteString("{}")
+					}
+				default:
+					if jsonBytes, err := json.Marshal(nestedVal); err == nil {
+						result.WriteString(string(jsonBytes))
+					} else {
+						result.WriteString("null")
+					}
+				}
+			}
+			result.WriteString("}")
 		case nil:
 			result.WriteString("null")
 		default:
