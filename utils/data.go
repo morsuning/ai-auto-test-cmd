@@ -25,14 +25,14 @@ func init() {
 	rand.New(rand.NewSource(time.Now().UnixNano()))
 }
 
-// ParseXML 解析XML字符串为map[string]interface{}
-func ParseXML(xmlStr string) (map[string]interface{}, error) {
+// ParseXML 解析XML字符串为map[string]any
+func ParseXML(xmlStr string) (map[string]any, error) {
 	// 使用自定义的XML解析函数
 	result, err := XMLToMap(xmlStr)
 	if err != nil {
 		return nil, fmt.Errorf("解析XML失败: %v", err)
 	}
-	
+
 	// 提取原始根元素名称
 	// 跳过XML声明，找到第一个真正的元素
 	rootRegex := regexp.MustCompile(`<\?xml[^>]*>\s*<([^\s>/]+)[^>]*>`)
@@ -47,7 +47,7 @@ func ParseXML(xmlStr string) (map[string]interface{}, error) {
 			originalRootElementName = simpleMatches[1]
 		}
 	}
-	
+
 	// 提取XML字段顺序
 	// 由于XML解析过程中字段顺序可能已经丢失，我们尝试从原始XML字符串中提取
 	keys := extractXMLKeys(xmlStr)
@@ -61,15 +61,15 @@ func ParseXML(xmlStr string) (map[string]interface{}, error) {
 		}
 		originalKeyOrder = keys
 	}
-	
+
 	// 如果结果中有根元素，提取其内容作为实际数据
 	for _, rootValue := range result {
-		if rootMap, ok := rootValue.(map[string]interface{}); ok {
+		if rootMap, ok := rootValue.(map[string]any); ok {
 			// 使用根元素内的数据替换整个结果
 			return rootMap, nil
 		}
 	}
-	
+
 	return result, nil
 }
 
@@ -78,25 +78,25 @@ func extractXMLKeys(xmlStr string) []string {
 	// 提取根元素内的子元素顺序
 	var keys []string
 	var seenKeys = make(map[string]bool)
-	
+
 	// 简化的方法：直接查找所有标签，然后过滤出根元素内的子元素
 	// 使用正则表达式提取所有标签
 	tagRegex := regexp.MustCompile(`<([^\s>/!?]+)[^>]*>`)
 	matches := tagRegex.FindAllStringSubmatch(xmlStr, -1)
-	
+
 	if len(matches) == 0 {
 		return keys
 	}
-	
+
 	// 第一个匹配应该是根元素，跳过它
 	for i, match := range matches {
 		if i == 0 {
 			continue // 跳过根元素
 		}
-		
+
 		if len(match) > 1 {
 			tagName := match[1]
-			
+
 			// 忽略XML声明和命名空间
 			if tagName != "" && tagName != "?xml" && !strings.Contains(tagName, ":") {
 				// 避免重复添加
@@ -107,12 +107,12 @@ func extractXMLKeys(xmlStr string) []string {
 			}
 		}
 	}
-	
+
 	return keys
 }
 
 // XMLToMap 将XML字符串转换为map
-func XMLToMap(xmlStr string) (map[string]interface{}, error) {
+func XMLToMap(xmlStr string) (map[string]any, error) {
 	// 创建一个自定义的解码器
 	decoder := xml.NewDecoder(strings.NewReader(xmlStr))
 	decoder.Strict = false
@@ -131,7 +131,7 @@ func XMLToMap(xmlStr string) (map[string]interface{}, error) {
 	}
 
 	// 将XMLNode转换为map
-	result := make(map[string]interface{})
+	result := make(map[string]any)
 	result[node.XMLName.Local] = nodeToMap(node)
 
 	// 简化结果，提取实际内容
@@ -139,8 +139,8 @@ func XMLToMap(xmlStr string) (map[string]interface{}, error) {
 }
 
 // simplifyXMLMap 简化XML转换后的map结构，提取实际内容
-func simplifyXMLMap(data map[string]interface{}) map[string]interface{} {
-	result := make(map[string]interface{})
+func simplifyXMLMap(data map[string]any) map[string]any {
+	result := make(map[string]any)
 
 	// 处理根节点
 	for key, value := range data {
@@ -149,7 +149,7 @@ func simplifyXMLMap(data map[string]interface{}) map[string]interface{} {
 		}
 
 		switch v := value.(type) {
-		case map[string]interface{}:
+		case map[string]any:
 			// 如果是简单的内容节点 (只有#content和_name)
 			if content, ok := v["#content"]; ok {
 				// 尝试将内容转换为数值类型
@@ -182,11 +182,11 @@ func simplifyXMLMap(data map[string]interface{}) map[string]interface{} {
 					result[key] = simplified
 				}
 			}
-		case []interface{}:
+		case []any:
 			// 处理数组
-			array := make([]interface{}, 0, len(v))
+			array := make([]any, 0, len(v))
 			for _, item := range v {
-				if mapItem, ok := item.(map[string]interface{}); ok {
+				if mapItem, ok := item.(map[string]any); ok {
 					// 如果数组元素是简单的内容节点
 					if content, ok := mapItem["#content"]; ok {
 						// 尝试将内容转换为数值类型
@@ -234,24 +234,24 @@ func simplifyXMLMap(data map[string]interface{}) map[string]interface{} {
 }
 
 // nodeToMap 将XMLNode转换为map
-func nodeToMap(node interface{}) interface{} {
+func nodeToMap(node any) any {
 	// 使用反射处理XMLNode结构
 	v := reflect.ValueOf(node)
-	
+
 	// 处理不同类型的节点
 	switch v.Kind() {
 	case reflect.String:
 		return v.String()
-		
+
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return v.Int()
-		
+
 	case reflect.Float32, reflect.Float64:
 		return v.Float()
-		
+
 	case reflect.Bool:
 		return v.Bool()
-		
+
 	case reflect.Slice:
 		// 处理字节数组
 		if v.Type().Elem().Kind() == reflect.Uint8 {
@@ -260,53 +260,53 @@ func nodeToMap(node interface{}) interface{} {
 			if s == "" {
 				return nil
 			}
-			
+
 			// 尝试解析为整数
 			if i, err := strconv.ParseInt(s, 10, 64); err == nil {
 				return i
 			}
-			
+
 			// 尝试解析为浮点数
 			if f, err := strconv.ParseFloat(s, 64); err == nil {
 				return f
 			}
-			
+
 			// 尝试解析为布尔值
 			if b, err := strconv.ParseBool(s); err == nil {
 				return b
 			}
-			
+
 			// 否则返回字符串
 			return s
 		}
-		
+
 		// 处理其他类型的切片
-		result := make([]interface{}, v.Len())
+		result := make([]any, v.Len())
 		for i := 0; i < v.Len(); i++ {
 			result[i] = nodeToMap(v.Index(i).Interface())
 		}
 		return result
-		
+
 	case reflect.Map:
 		// 处理map
-		result := make(map[string]interface{})
+		result := make(map[string]any)
 		for _, key := range v.MapKeys() {
 			strKey := fmt.Sprintf("%v", key.Interface())
 			result[strKey] = nodeToMap(v.MapIndex(key).Interface())
 		}
 		return result
-		
+
 	case reflect.Struct:
 		// 处理XMLNode结构
-		result := make(map[string]interface{})
-		
+		result := make(map[string]any)
+
 		// 获取XMLName字段
 		xmlNameField := v.FieldByName("XMLName")
 		if xmlNameField.IsValid() {
 			xmlName := xmlNameField.Interface().(xml.Name)
 			result["_name"] = xmlName.Local
 		}
-		
+
 		// 获取Content字段
 		contentField := v.FieldByName("Content")
 		if contentField.IsValid() && contentField.Len() > 0 {
@@ -315,22 +315,22 @@ func nodeToMap(node interface{}) interface{} {
 				result["#content"] = content
 			}
 		}
-		
+
 		// 获取Attrs字段
 		attrsField := v.FieldByName("Attrs")
 		if attrsField.IsValid() && attrsField.Len() > 0 {
-			attrs := make(map[string]interface{})
+			attrs := make(map[string]any)
 			for i := 0; i < attrsField.Len(); i++ {
 				attr := attrsField.Index(i).Interface().(xml.Attr)
 				attrs[attr.Name.Local] = attr.Value
 			}
 			result["@attrs"] = attrs
 		}
-		
+
 		// 获取Nodes字段
 		nodesField := v.FieldByName("Nodes")
 		if nodesField.IsValid() && nodesField.Len() > 0 {
-			childNodes := make(map[string]interface{})
+			childNodes := make(map[string]any)
 			for i := 0; i < nodesField.Len(); i++ {
 				childNode := nodesField.Index(i).Interface()
 				childNodeValue := reflect.ValueOf(childNode)
@@ -338,33 +338,33 @@ func nodeToMap(node interface{}) interface{} {
 				if !xmlNameField.IsValid() {
 					continue
 				}
-				
+
 				xmlName := xmlNameField.Interface().(xml.Name)
 				name := xmlName.Local
 				value := nodeToMap(childNode)
-				
+
 				// 检查是否已存在同名节点
 				if existing, ok := childNodes[name]; ok {
 					// 如果已存在，转换为数组
 					switch v := existing.(type) {
-					case []interface{}:
+					case []any:
 						childNodes[name] = append(v, value)
 					default:
-						childNodes[name] = []interface{}{v, value}
+						childNodes[name] = []any{v, value}
 					}
 				} else {
 					childNodes[name] = value
 				}
 			}
-			
+
 			// 合并子节点到结果
 			for k, v := range childNodes {
 				result[k] = v
 			}
 		}
-		
+
 		return result
-		
+
 	default:
 		// 处理其他类型
 		return fmt.Sprintf("%v", v.Interface())
@@ -372,8 +372,8 @@ func nodeToMap(node interface{}) interface{} {
 }
 
 // convertNumbers 将json.Number转换为适当的数字类型
-func convertNumbers(data map[string]interface{}) map[string]interface{} {
-	result := make(map[string]interface{})
+func convertNumbers(data map[string]any) map[string]any {
+	result := make(map[string]any)
 	for key, value := range data {
 		switch v := value.(type) {
 		case json.Number:
@@ -394,14 +394,14 @@ func convertNumbers(data map[string]interface{}) map[string]interface{} {
 					result[key] = string(v)
 				}
 			}
-		case map[string]interface{}:
+		case map[string]any:
 			// 递归处理嵌套对象
 			result[key] = convertNumbers(v)
-		case []interface{}:
+		case []any:
 			// 处理数组
-			arr := make([]interface{}, len(v))
+			arr := make([]any, len(v))
 			for i, item := range v {
-				if itemMap, ok := item.(map[string]interface{}); ok {
+				if itemMap, ok := item.(map[string]any); ok {
 					arr[i] = convertNumbers(itemMap)
 				} else if itemNum, ok := item.(json.Number); ok {
 					if intVal, err := itemNum.Int64(); err == nil {
@@ -428,9 +428,9 @@ func convertNumbers(data map[string]interface{}) map[string]interface{} {
 }
 
 // ParseJSON 解析JSON字符串并保留字段顺序
-func ParseJSON(jsonStr string) (map[string]interface{}, error) {
+func ParseJSON(jsonStr string) (map[string]any, error) {
 	// 创建一个空接口来存储解析结果
-	var result map[string]interface{}
+	var result map[string]any
 
 	// 使用Decoder来保持数字的原始格式
 	decoder := json.NewDecoder(strings.NewReader(jsonStr))
@@ -449,7 +449,6 @@ func ParseJSON(jsonStr string) (map[string]interface{}, error) {
 	if len(keys) > 0 {
 		// 确保字段顺序正确
 		originalKeyOrder = keys
-		fmt.Printf("JSON字段顺序: %v\n", originalKeyOrder)
 	}
 
 	return result, nil
@@ -461,15 +460,15 @@ func extractJSONKeys(jsonStr string) []string {
 	jsonStr = strings.ReplaceAll(jsonStr, " ", "")
 	jsonStr = strings.ReplaceAll(jsonStr, "\n", "")
 	jsonStr = strings.ReplaceAll(jsonStr, "\t", "")
-	
+
 	// 确保是一个对象
 	if !strings.HasPrefix(jsonStr, "{") || !strings.HasSuffix(jsonStr, "}") {
 		return nil
 	}
-	
+
 	// 移除首尾的花括号
 	jsonStr = jsonStr[1 : len(jsonStr)-1]
-	
+
 	// 提取字段名
 	var keys []string
 	var inQuote bool
@@ -477,10 +476,10 @@ func extractJSONKeys(jsonStr string) []string {
 	var inObject int
 	var start int
 	var key string
-	
+
 	for i := 0; i < len(jsonStr); i++ {
 		ch := jsonStr[i]
-		
+
 		// 处理引号
 		if ch == '"' && (i == 0 || jsonStr[i-1] != '\\') {
 			inQuote = !inQuote
@@ -492,41 +491,46 @@ func extractJSONKeys(jsonStr string) []string {
 				key = jsonStr[start:i]
 			}
 		}
-		
+
 		// 处理冒号（字段名和值的分隔符）
 		if ch == ':' && !inQuote && inArray == 0 && inObject == 0 && key != "" {
 			keys = append(keys, key)
 			key = ""
 		}
-		
+
 		// 处理数组
 		if ch == '[' && !inQuote {
 			inArray++
 		} else if ch == ']' && !inQuote {
 			inArray--
 		}
-		
+
 		// 处理对象
 		if ch == '{' && !inQuote {
 			inObject++
 		} else if ch == '}' && !inQuote {
 			inObject--
 		}
-		
+
 		// 处理逗号（值的分隔符）
 		if ch == ',' && !inQuote && inArray == 0 && inObject == 0 {
 			// 重置，准备处理下一个字段
 			key = ""
 		}
 	}
-	
+
 	return keys
 }
 
-// GenerateTestCases 根据原始数据生成测试用例
-func GenerateTestCases(data map[string]interface{}, count int) []map[string]interface{} {
-	testCases := make([]map[string]interface{}, count)
-	
+// GenerateTestCases 生成测试用例（不使用约束）
+func GenerateTestCases(data map[string]any, count int) []map[string]any {
+	return GenerateTestCasesWithConstraints(data, count, false)
+}
+
+// GenerateTestCasesWithConstraints 生成测试用例（支持约束系统）
+func GenerateTestCasesWithConstraints(data map[string]any, count int, useConstraints bool) []map[string]any {
+	testCases := make([]map[string]any, count)
+
 	// 使用已经保存的原始字段顺序
 	keys := originalKeyOrder
 	if len(keys) == 0 {
@@ -538,7 +542,7 @@ func GenerateTestCases(data map[string]interface{}, count int) []map[string]inte
 		// 更新全局变量
 		originalKeyOrder = keys
 	}
-	
+
 	// 记录原始数据类型
 	types := make(map[string]string)
 	for key, value := range data {
@@ -573,33 +577,45 @@ func GenerateTestCases(data map[string]interface{}, count int) []map[string]inte
 			}
 		case bool:
 			types[key] = "bool"
-		case []interface{}:
+		case []any:
 			types[key] = "array"
-		case map[string]interface{}:
+		case map[string]any:
 			types[key] = "object"
 		default:
 			types[key] = "unknown"
 		}
 	}
-	
+
 	// 生成指定数量的测试用例
 	for i := 0; i < count; i++ {
 		testCase := make(map[string]any)
 		// 按原始顺序处理每个字段
 		for _, key := range keys {
-			testCase[key] = generateVariation(data[key], 0.5) // 上下浮动50%
+			if useConstraints {
+				// 尝试查找字段约束
+				if constraint := FindFieldConstraint(key); constraint != nil {
+					// 使用约束生成值
+					testCase[key] = GenerateConstrainedValue(constraint, data[key])
+				} else {
+					// 没有找到约束，使用原始变化逻辑
+					testCase[key] = generateVariation(data[key], 0.5)
+				}
+			} else {
+				// 不使用约束，使用原始变化逻辑
+				testCase[key] = generateVariation(data[key], 0.5) // 上下浮动50%
+			}
 		}
 		testCases[i] = testCase
 	}
-	
+
 	// 保存类型信息到全局变量（字段顺序已在ParseJSON中设置）
 	originalValueTypes = types
-	
+
 	return testCases
 }
 
 // generateVariation 根据原始值生成变化值
-func generateVariation(value interface{}, variationRate float64) interface{} {
+func generateVariation(value any, variationRate float64) any {
 	// 根据值的类型进行不同处理
 	switch v := value.(type) {
 	case int, int8, int16, int32, int64:
@@ -611,7 +627,7 @@ func generateVariation(value interface{}, variationRate float64) interface{} {
 		}
 		// 生成随机变化值，确保结果仍然是整数
 		newVal := intVal + rand.Int63n(2*variation+1) - variation
-		
+
 		// 根据原始类型返回相应的整数类型
 		switch v.(type) {
 		case int:
@@ -633,14 +649,14 @@ func generateVariation(value interface{}, variationRate float64) interface{} {
 		floatVal := reflect.ValueOf(v).Float()
 		variation := floatVal * variationRate
 		newVal := floatVal + (rand.Float64()*2-1)*variation
-		
+
 		// 保持原始浮点数的精度
 		origStr := fmt.Sprintf("%v", v)
 		decimalPlaces := 0
 		if dotIndex := strings.Index(origStr, "."); dotIndex != -1 {
 			decimalPlaces = len(origStr) - dotIndex - 1
 		}
-		
+
 		// 使用相同的精度格式化新值并返回相应的类型
 		if decimalPlaces > 0 {
 			roundedVal := math.Round(newVal*math.Pow10(decimalPlaces)) / math.Pow10(decimalPlaces)
@@ -653,7 +669,7 @@ func generateVariation(value interface{}, variationRate float64) interface{} {
 				return roundedVal
 			}
 		}
-		
+
 		// 没有小数部分的情况
 		switch v.(type) {
 		case float32:
@@ -685,13 +701,13 @@ func generateVariation(value interface{}, variationRate float64) interface{} {
 			// 是浮点数字符串
 			variation := floatVal * variationRate
 			newVal := floatVal + (rand.Float64()*2-1)*variation
-			
+
 			// 保持原始浮点数字符串的精度
 			decimalPlaces := 0
 			if dotIndex := strings.Index(v, "."); dotIndex != -1 {
 				decimalPlaces = len(v) - dotIndex - 1
 			}
-			
+
 			// 使用相同的精度格式化新值
 			return strconv.FormatFloat(newVal, 'f', decimalPlaces, 64)
 		} else {
@@ -706,17 +722,17 @@ func generateVariation(value interface{}, variationRate float64) interface{} {
 		}
 		return v
 
-	case []interface{}:
+	case []any:
 		// 数组，递归处理每个元素
-		result := make([]interface{}, len(v))
+		result := make([]any, len(v))
 		for i, item := range v {
 			result[i] = generateVariation(item, variationRate)
 		}
 		return result
 
-	case map[string]interface{}:
+	case map[string]any:
 		// 对象，递归处理每个属性
-		result := make(map[string]interface{})
+		result := make(map[string]any)
 		for key, item := range v {
 			result[key] = generateVariation(item, variationRate)
 		}
@@ -746,18 +762,18 @@ func randomizeString(s string) string {
 	if maxLen < minLen {
 		maxLen = minLen
 	}
-	
+
 	// 随机确定新长度
 	newLen := minLen + rand.Intn(maxLen-minLen+1)
-	
+
 	// 将原字符串转换为字符数组
 	runes := []rune(s)
 	originalRunes := make([]rune, len(runes))
 	copy(originalRunes, runes)
-	
+
 	// 字符集：字母和数字的组合
 	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	
+
 	// 如果新长度与原长度不同，需要调整字符串长度
 	if newLen != originalLen {
 		if newLen > originalLen {
@@ -778,25 +794,25 @@ func randomizeString(s string) string {
 			}
 		}
 	}
-	
+
 	// 随机变更50%的字符
 	changeCount := len(runes) / 2
 	if changeCount == 0 && len(runes) > 0 {
 		changeCount = 1 // 至少变更一个字符
 	}
-	
+
 	// 创建一个位置索引数组，用于随机选择要变更的位置
 	positions := make([]int, len(runes))
 	for i := range positions {
 		positions[i] = i
 	}
-	
+
 	// 随机打乱位置数组
 	for i := len(positions) - 1; i > 0; i-- {
 		j := rand.Intn(i + 1)
 		positions[i], positions[j] = positions[j], positions[i]
 	}
-	
+
 	// 变更前changeCount个位置的字符
 	for i := 0; i < changeCount && i < len(positions); i++ {
 		pos := positions[i]
@@ -807,7 +823,7 @@ func randomizeString(s string) string {
 }
 
 // ConvertToXMLRows 将测试用例转换为XML行格式（每行一个完整的XML）
-func ConvertToXMLRows(testCases []map[string]interface{}) [][]string {
+func ConvertToXMLRows(testCases []map[string]any) [][]string {
 	if len(testCases) == 0 {
 		return [][]string{}
 	}
@@ -826,7 +842,7 @@ func ConvertToXMLRows(testCases []map[string]interface{}) [][]string {
 			jsonData, _ := json.Marshal(testCase)
 			xmlData = string(jsonData)
 		}
-		
+
 		// 添加数据行（只有一列）
 		result = append(result, []string{xmlData})
 	}
@@ -835,17 +851,17 @@ func ConvertToXMLRows(testCases []map[string]interface{}) [][]string {
 }
 
 // convertMapToXML 将map转换为XML字符串
-func convertMapToXML(data map[string]interface{}) (string, error) {
+func convertMapToXML(data map[string]any) (string, error) {
 	var xmlBuilder strings.Builder
 	xmlBuilder.WriteString("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
-	
+
 	// 使用保存的原始根元素名称，如果没有则使用默认的root
 	rootElement := originalRootElementName
 	if rootElement == "" {
 		rootElement = "root"
 	}
 	xmlBuilder.WriteString(fmt.Sprintf("<%s>\n", rootElement))
-	
+
 	// 使用保存的原始字段顺序
 	keys := originalKeyOrder
 	if len(keys) == 0 {
@@ -855,19 +871,19 @@ func convertMapToXML(data map[string]interface{}) (string, error) {
 			keys = append(keys, key)
 		}
 	}
-	
+
 	for _, key := range keys {
 		value, exists := data[key]
 		if !exists {
 			continue
 		}
-		
+
 		// 清理XML标签名（移除特殊字符）
 		cleanKey := strings.ReplaceAll(key, " ", "_")
 		cleanKey = strings.ReplaceAll(cleanKey, "-", "_")
-		
+
 		xmlBuilder.WriteString(fmt.Sprintf("  <%s>", cleanKey))
-		
+
 		// 根据值的类型进行处理
 		switch v := value.(type) {
 		case string:
@@ -890,7 +906,7 @@ func convertMapToXML(data map[string]interface{}) (string, error) {
 			}
 		case bool:
 			xmlBuilder.WriteString(fmt.Sprintf("%t", v))
-		case map[string]interface{}:
+		case map[string]any:
 			// 嵌套对象，递归处理
 			xmlBuilder.WriteString("\n")
 			// 使用原始字段顺序处理嵌套对象
@@ -922,7 +938,7 @@ func convertMapToXML(data map[string]interface{}) (string, error) {
 				xmlBuilder.WriteString(fmt.Sprintf("    <%s>%s</%s>\n", cleanNestedKey, valueStr, cleanNestedKey))
 			}
 			xmlBuilder.WriteString("  ")
-		case []interface{}:
+		case []any:
 			// 数组，处理每个元素
 			xmlBuilder.WriteString("\n")
 			for _, item := range v {
@@ -952,10 +968,10 @@ func convertMapToXML(data map[string]interface{}) (string, error) {
 			// 其他类型直接转换为字符串
 			xmlBuilder.WriteString(fmt.Sprintf("%v", v))
 		}
-		
+
 		xmlBuilder.WriteString(fmt.Sprintf("</%s>\n", cleanKey))
 	}
-	
+
 	xmlBuilder.WriteString(fmt.Sprintf("</%s>", rootElement))
 	return xmlBuilder.String(), nil
 }
@@ -972,10 +988,10 @@ func escapeXMLValue(value string) string {
 
 // customJSONMarshal 自定义JSON序列化，保持大数值的原始格式
 // 避免将长数值转换为科学计数法
-func customJSONMarshal(data map[string]interface{}) (string, error) {
+func customJSONMarshal(data map[string]any) (string, error) {
 	var result strings.Builder
 	result.WriteString("{")
-	
+
 	// 使用保存的原始字段顺序来序列化JSON
 	keys := originalKeyOrder
 	if len(keys) == 0 {
@@ -985,7 +1001,7 @@ func customJSONMarshal(data map[string]interface{}) (string, error) {
 			keys = append(keys, key)
 		}
 	}
-	
+
 	first := true
 	for _, key := range keys {
 		// 检查键是否存在于数据中
@@ -993,15 +1009,15 @@ func customJSONMarshal(data map[string]interface{}) (string, error) {
 		if !exists {
 			continue
 		}
-		
+
 		if !first {
 			result.WriteString(",")
 		}
 		first = false
-		
+
 		// 写入键
 		result.WriteString(fmt.Sprintf(`"%s":`, key))
-		
+
 		// 根据值的类型进行处理
 		switch v := value.(type) {
 		case string:
@@ -1025,7 +1041,7 @@ func customJSONMarshal(data map[string]interface{}) (string, error) {
 			}
 		case bool:
 			result.WriteString(fmt.Sprintf("%t", v))
-		case []interface{}:
+		case []any:
 			// 数组处理
 			result.WriteString("[")
 			for i, item := range v {
@@ -1059,7 +1075,7 @@ func customJSONMarshal(data map[string]interface{}) (string, error) {
 				}
 			}
 			result.WriteString("]")
-		case map[string]interface{}:
+		case map[string]any:
 			// 嵌套对象，递归处理
 			if nestedJSON, err := customJSONMarshal(v); err == nil {
 				result.WriteString(nestedJSON)
@@ -1077,14 +1093,14 @@ func customJSONMarshal(data map[string]interface{}) (string, error) {
 			}
 		}
 	}
-	
+
 	result.WriteString("}")
 	return result.String(), nil
 }
 
 // ConvertToJSONRows 将测试用例转换为单列JSON格式的CSV
 // 每行包含一个完整的JSON字符串
-func ConvertToJSONRows(testCases []map[string]interface{}) [][]string {
+func ConvertToJSONRows(testCases []map[string]any) [][]string {
 	if len(testCases) == 0 {
 		return [][]string{}
 	}
@@ -1102,7 +1118,7 @@ func ConvertToJSONRows(testCases []map[string]interface{}) [][]string {
 			// 如果转换失败，使用空JSON对象
 			jsonStr = "{}"
 		}
-		
+
 		// 添加数据行（只有一列）
 		result = append(result, []string{jsonStr})
 	}
@@ -1111,7 +1127,7 @@ func ConvertToJSONRows(testCases []map[string]interface{}) [][]string {
 }
 
 // ConvertToCSV 将测试用例转换为CSV格式
-func ConvertToCSV(testCases []map[string]interface{}) [][]string {
+func ConvertToCSV(testCases []map[string]any) [][]string {
 	if len(testCases) == 0 {
 		return [][]string{}
 	}
@@ -1137,7 +1153,7 @@ func ConvertToCSV(testCases []map[string]interface{}) [][]string {
 		for j, key := range keys {
 			// 获取值
 			value := testCase[key]
-			
+
 			// 根据原始数据类型处理值
 			if originalValueTypes != nil {
 				if typeInfo, ok := originalValueTypes[key]; ok {
@@ -1167,7 +1183,7 @@ func ConvertToCSV(testCases []map[string]interface{}) [][]string {
 								precision = p
 							}
 						}
-						
+
 						switch v := value.(type) {
 						case float64, float32:
 							floatVal := reflect.ValueOf(v).Float()
@@ -1184,10 +1200,10 @@ func ConvertToCSV(testCases []map[string]interface{}) [][]string {
 					}
 				}
 			}
-			
+
 			// 默认处理方式
 			switch v := value.(type) {
-			case map[string]interface{}, []interface{}:
+			case map[string]any, []any:
 				// 将复杂结构转换为JSON
 				jsonBytes, err := json.Marshal(v)
 				if err != nil {
@@ -1208,7 +1224,7 @@ func ConvertToCSV(testCases []map[string]interface{}) [][]string {
 
 // FormatJSON 格式化JSON字符串
 func FormatJSON(jsonStr string) (string, error) {
-	var obj interface{}
+	var obj any
 	if err := json.Unmarshal([]byte(jsonStr), &obj); err != nil {
 		return "", err
 	}

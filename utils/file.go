@@ -92,19 +92,19 @@ func ReadFileContent(filePath string) (string, error) {
 func ValidateXMLFormat(content string) error {
 	// 去除首尾空白字符
 	content = strings.TrimSpace(content)
-	
+
 	// 检查是否为空
 	if content == "" {
 		return fmt.Errorf("XML内容不能为空")
 	}
-	
+
 	// 尝试解析XML
-	var xmlData interface{}
+	var xmlData any
 	err := xml.Unmarshal([]byte(content), &xmlData)
 	if err != nil {
 		return fmt.Errorf("无效的XML格式: %v", err)
 	}
-	
+
 	return nil
 }
 
@@ -112,19 +112,19 @@ func ValidateXMLFormat(content string) error {
 func ValidateJSONFormat(content string) error {
 	// 去除首尾空白字符
 	content = strings.TrimSpace(content)
-	
+
 	// 检查是否为空
 	if content == "" {
 		return fmt.Errorf("JSON内容不能为空")
 	}
-	
+
 	// 尝试解析JSON
-	var jsonData interface{}
+	var jsonData any
 	err := json.Unmarshal([]byte(content), &jsonData)
 	if err != nil {
 		return fmt.Errorf("无效的JSON格式: %v", err)
 	}
-	
+
 	return nil
 }
 
@@ -135,7 +135,7 @@ func ReadAndValidateFileContent(filePath string, format string) (string, error) 
 	if err != nil {
 		return "", err
 	}
-	
+
 	// 根据格式进行验证
 	switch strings.ToLower(format) {
 	case "xml":
@@ -149,6 +149,6 @@ func ReadAndValidateFileContent(filePath string, format string) (string, error) 
 	default:
 		return "", fmt.Errorf("不支持的格式: %s，仅支持 xml 或 json", format)
 	}
-	
+
 	return content, nil
 }

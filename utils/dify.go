@@ -20,17 +20,17 @@ type DifyClient struct {
 
 // DifyRequest 表示发送给Dify API的请求
 type DifyRequest struct {
-	Format       string      `json:"format"`       // 格式：xml或json
-	RawMessage   string      `json:"raw_message"`  // 原始报文
-	Count        int         `json:"count"`        // 生成数量
-	Documentation interface{} `json:"documentation,omitempty"` // 接口文档（可选）
+	Format        string `json:"format"`                  // 格式：xml或json
+	RawMessage    string `json:"raw_message"`             // 原始报文
+	Count         int    `json:"count"`                   // 生成数量
+	Documentation any    `json:"documentation,omitempty"` // 接口文档（可选）
 }
 
 // DifyResponse 表示Dify API的响应
 type DifyResponse struct {
-	Success bool        `json:"success"`
-	Data    interface{} `json:"data"`
-	Error   string      `json:"error,omitempty"`
+	Success bool   `json:"success"`
+	Data    any    `json:"data"`
+	Error   string `json:"error,omitempty"`
 }
 
 // NewDifyClient 创建新的Dify API客户端
@@ -47,7 +47,7 @@ func NewDifyClient(baseURL string, timeout int) *DifyClient {
 }
 
 // GenerateTestCases 通过Dify API生成测试用例
-func (c *DifyClient) GenerateTestCases(req DifyRequest) ([]map[string]interface{}, error) {
+func (c *DifyClient) GenerateTestCases(req DifyRequest) ([]map[string]any, error) {
 	// 构建请求URL
 	url := c.BaseURL
 
@@ -102,15 +102,15 @@ func (c *DifyClient) GenerateTestCases(req DifyRequest) ([]map[string]interface{
 	}
 
 	// 解析测试用例数据
-	testCasesData, ok := difyResp.Data.([]interface{})
+	testCasesData, ok := difyResp.Data.([]any)
 	if !ok {
 		return nil, fmt.Errorf("响应数据格式错误")
 	}
 
 	// 转换为所需格式
-	testCases := make([]map[string]interface{}, len(testCasesData))
+	testCases := make([]map[string]any, len(testCasesData))
 	for i, item := range testCasesData {
-		testCase, ok := item.(map[string]interface{})
+		testCase, ok := item.(map[string]any)
 		if !ok {
 			return nil, fmt.Errorf("测试用例数据格式错误")
 		}

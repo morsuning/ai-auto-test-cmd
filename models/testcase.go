@@ -1,27 +1,26 @@
 /*
 Copyright © 2025 API自动化测试命令行工具
-
 */
 package models
 
 // TestCase 表示一个测试用例
 type TestCase struct {
-	ID          string                 `json:"id"`           // 测试用例ID
-	Name        string                 `json:"name"`         // 测试用例名称
-	Description string                 `json:"description"`  // 测试用例描述
-	Type        string                 `json:"type"`         // 测试用例类型（正例/反例）
-	Data        map[string]interface{} `json:"data"`         // 测试数据
-	Expected    map[string]interface{} `json:"expected"`     // 预期结果
+	ID          string         `json:"id"`          // 测试用例ID
+	Name        string         `json:"name"`        // 测试用例名称
+	Description string         `json:"description"` // 测试用例描述
+	Type        string         `json:"type"`        // 测试用例类型（正例/反例）
+	Data        map[string]any `json:"data"`        // 测试数据
+	Expected    map[string]any `json:"expected"`    // 预期结果
 }
 
 // TestResult 表示一个测试结果
 type TestResult struct {
-	TestCaseID  string `json:"test_case_id"`  // 测试用例ID
-	Success     bool   `json:"success"`       // 是否成功
-	StatusCode  int    `json:"status_code"`   // HTTP状态码
-	ResponseBody string `json:"response_body"` // 响应体
-	Error       string `json:"error,omitempty"` // 错误信息（如果有）
-	Duration    int64  `json:"duration"`      // 执行时间（毫秒）
+	TestCaseID   string `json:"test_case_id"`    // 测试用例ID
+	Success      bool   `json:"success"`         // 是否成功
+	StatusCode   int    `json:"status_code"`     // HTTP状态码
+	ResponseBody string `json:"response_body"`   // 响应体
+	Error        string `json:"error,omitempty"` // 错误信息（如果有）
+	Duration     int64  `json:"duration"`        // 执行时间（毫秒）
 }
 
 // TestSuite 表示一组测试用例

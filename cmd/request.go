@@ -44,28 +44,28 @@ var requestCmd = &cobra.Command{
 		timeout, _ := cmd.Flags().GetInt("timeout")
 		concurrent, _ := cmd.Flags().GetInt("concurrent")
 		debug, _ := cmd.Flags().GetBool("debug")
-		
+
 		// 获取请求体格式参数
 		isXML, _ := cmd.Flags().GetBool("xml")
 		isJSON, _ := cmd.Flags().GetBool("json")
-		
+
 		// 验证请求体格式参数
 		if !isXML && !isJSON {
 			fmt.Println("❌ 错误: 必须指定请求体格式，使用 --xml 或 --json 参数")
 			os.Exit(1)
 		}
-		
+
 		if isXML && isJSON {
 			fmt.Println("❌ 错误: 不能同时指定 --xml 和 --json 参数，请只选择一种格式")
 			os.Exit(1)
 		}
-		
+
 		// 验证GET请求的格式约束
 		if strings.ToUpper(method) == "GET" && isXML {
 			fmt.Println("❌ 错误: GET请求只支持JSON格式，请使用 --json 参数")
 			os.Exit(1)
 		}
-		
+
 		// 确定内容类型
 		contentType := "json"
 		if isXML {
@@ -101,11 +101,11 @@ func init() {
 	requestCmd.Flags().String("save-path", "", "结果保存路径（默认为当前目录下的result.csv）")
 	requestCmd.Flags().IntP("timeout", "t", 30, "请求超时时间（秒，默认30）")
 	requestCmd.Flags().IntP("concurrent", "c", 1, "并发请求数（默认1）")
-	
+
 	// 请求体格式参数（互斥）
 	requestCmd.Flags().Bool("xml", false, "使用XML格式发送请求体")
 	requestCmd.Flags().Bool("json", false, "使用JSON格式发送请求体")
-	
+
 	// 调试参数
 	requestCmd.Flags().Bool("debug", false, "启用调试模式，输出详细的请求信息")
 
@@ -184,21 +184,21 @@ func parseCSVToTestCases(data [][]string) ([]models.TestCase, error) {
 			return nil, fmt.Errorf("第%d行数据列数与标题行不匹配", i+2)
 		}
 
-		var testData map[string]interface{}
-		
+		var testData map[string]any
+
 		if isXMLFormat {
 			// XML格式：直接使用XML字符串
-			testData = map[string]interface{}{
+			testData = map[string]any{
 				"_xml_content": row[0], // 使用特殊键存储XML内容
 			}
 		} else if isJSONFormat {
 			// JSON格式：直接使用JSON字符串
-			testData = map[string]interface{}{
+			testData = map[string]any{
 				"_json_content": row[0], // 使用特殊键存储JSON内容
 			}
 		} else {
 			// 普通格式：构建测试数据
-			testData = make(map[string]interface{})
+			testData = make(map[string]any)
 			for j, value := range row {
 				testData[headers[j]] = parseValue(value)
 			}
@@ -219,7 +219,7 @@ func parseCSVToTestCases(data [][]string) ([]models.TestCase, error) {
 }
 
 // parseValue 解析字符串值为合适的类型
-func parseValue(value string) interface{} {
+func parseValue(value string) any {
 	// 尝试解析为数字
 	if intVal, err := strconv.Atoi(value); err == nil {
 		return intVal
@@ -236,7 +236,7 @@ func parseValue(value string) interface{} {
 	}
 
 	// 尝试解析为JSON
-	var jsonVal interface{}
+	var jsonVal any
 	if err := json.Unmarshal([]byte(value), &jsonVal); err == nil {
 		return jsonVal
 	}
@@ -293,7 +293,7 @@ func buildHTTPRequests(testCases []models.TestCase, url, method string, timeout 
 			var queryParams []string
 			if jsonContent, exists := testCase.Data["_json_content"]; exists {
 				// 解析JSON内容为查询参数
-				var jsonData map[string]interface{}
+				var jsonData map[string]any
 				if err := json.Unmarshal([]byte(fmt.Sprintf("%v", jsonContent)), &jsonData); err == nil {
 					for key, value := range jsonData {
 						queryParams = append(queryParams, fmt.Sprintf("%s=%v", key, value))
@@ -305,7 +305,7 @@ func buildHTTPRequests(testCases []models.TestCase, url, method string, timeout 
 					queryParams = append(queryParams, fmt.Sprintf("%s=%v", key, value))
 				}
 			}
-			
+
 			// 将查询参数添加到URL
 			if len(queryParams) > 0 {
 				separator := "?"
@@ -438,11 +438,11 @@ func saveResults(results []models.TestResult, savePath string) error {
 }
 
 // convertToXML 将数据转换为XML格式
-func convertToXML(data map[string]interface{}) (string, error) {
+func convertToXML(data map[string]any) (string, error) {
 	// 创建一个包装结构来生成XML
 	type XMLData struct {
-		XMLName xml.Name               `xml:"data"`
-		Fields  map[string]interface{} `xml:"-"`
+		XMLName xml.Name       `xml:"data"`
+		Fields  map[string]any `xml:"-"`
 	}
 
 	// 由于Go的xml包对map支持有限，我们手动构建XML字符串
@@ -493,17 +493,17 @@ func convertToXML(data map[string]interface{}) (string, error) {
 func printDebugInfo(requests []utils.HTTPRequest) {
 	fmt.Println("\n=== 调试信息 ===")
 	fmt.Printf("总请求数: %d\n\n", len(requests))
-	
+
 	for i, req := range requests {
 		fmt.Printf("📋 请求 %d:\n", i+1)
 		fmt.Println("┌─────────────────────────────────────────────────────────────")
-		
+
 		// 输出URL和方法
 		fmt.Printf("│ URL:    %s\n", req.URL)
 		fmt.Printf("│ Method: %s\n", req.Method)
 		fmt.Printf("│ Timeout: %d秒\n", req.Timeout)
 		fmt.Println("│")
-		
+
 		// 输出HTTP Headers
 		fmt.Println("│ HTTP Headers:")
 		if len(req.Headers) == 0 {
@@ -514,7 +514,7 @@ func printDebugInfo(requests []utils.HTTPRequest) {
 			}
 		}
 		fmt.Println("│")
-		
+
 		// 输出HTTP Body
 		fmt.Println("│ HTTP Body:")
 		if req.Body == "" {
@@ -526,11 +526,11 @@ func printDebugInfo(requests []utils.HTTPRequest) {
 				fmt.Printf("│   %s\n", line)
 			}
 		}
-		
+
 		fmt.Println("└─────────────────────────────────────────────────────────────")
 		fmt.Println()
 	}
-	
+
 	fmt.Println("=== 调试信息结束 ===")
 }
 
@@ -538,7 +538,7 @@ func printDebugInfo(requests []utils.HTTPRequest) {
 func printResponseDetails(testCaseNum int, result models.TestResult) {
 	fmt.Printf("📄 测试用例 %d 响应详情:\n", testCaseNum)
 	fmt.Println("┌─────────────────────────────────────────────────────────────")
-	
+
 	// 输出基本信息
 	fmt.Printf("│ 测试用例ID: %s\n", result.TestCaseID)
 	fmt.Printf("│ 状态码:     %d\n", result.StatusCode)
@@ -550,7 +550,7 @@ func printResponseDetails(testCaseNum int, result models.TestResult) {
 		return "❌ 失败"
 	}())
 	fmt.Println("│")
-	
+
 	// 输出错误信息（如果有）
 	if result.Error != "" {
 		fmt.Println("│ 错误信息:")
@@ -560,14 +560,14 @@ func printResponseDetails(testCaseNum int, result models.TestResult) {
 		}
 		fmt.Println("│")
 	}
-	
+
 	// 输出响应体
 	fmt.Println("│ 响应体:")
 	if result.ResponseBody == "" {
 		fmt.Println("│   (空响应体)")
 	} else {
 		// 尝试格式化JSON响应体
-		var jsonData interface{}
+		var jsonData any
 		if err := json.Unmarshal([]byte(result.ResponseBody), &jsonData); err == nil {
 			// 如果是有效的JSON，进行格式化输出
 			if formattedJSON, err := json.MarshalIndent(jsonData, "│   ", "  "); err == nil {
@@ -591,7 +591,7 @@ func printResponseDetails(testCaseNum int, result models.TestResult) {
 			}
 		}
 	}
-	
+
 	fmt.Println("└─────────────────────────────────────────────────────────────")
 	fmt.Println()
 }

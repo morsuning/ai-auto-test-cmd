@@ -25,7 +25,13 @@ var localGenCmd = &cobra.Command{
   atc local-gen -xml -f example.xml -n 20
 
   # 从JSON文件读取正例报文生成测试用例
-  atc local-gen -json -f example.json -n 25`,
+  atc local-gen -json -f example.json -n 25
+
+  # 使用默认约束配置生成智能测试用例
+  atc local-gen -json -f example.json -n 10 --constraints
+
+  # 使用自定义约束配置文件生成测试用例
+  atc local-gen -json -f example.json -n 10 --constraints-file custom.toml`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// 获取命令行参数
 		raw, _ := cmd.Flags().GetString("raw")
@@ -34,6 +40,8 @@ var localGenCmd = &cobra.Command{
 		isXML, _ := cmd.Flags().GetBool("xml")
 		isJSON, _ := cmd.Flags().GetBool("json")
 		output, _ := cmd.Flags().GetString("output")
+		useConstraints, _ := cmd.Flags().GetBool("constraints")
+		constraintsFile, _ := cmd.Flags().GetString("constraints-file")
 
 		// 检查输入方式：必须指定raw或file其中之一
 		if raw == "" && file == "" {
@@ -97,10 +105,28 @@ var localGenCmd = &cobra.Command{
 		fmt.Printf("生成数量: %d\n", num)
 		fmt.Printf("输出文件: %s\n", output)
 
-
+		// 加载约束配置
+		if useConstraints || constraintsFile != "" {
+			fmt.Println("启用约束模式")
+			if constraintsFile != "" {
+				fmt.Printf("加载约束配置文件: %s\n", constraintsFile)
+				if err := utils.LoadConstraintConfig(constraintsFile); err != nil {
+					fmt.Printf("加载约束配置失败: %v\n", err)
+					return
+				}
+				fmt.Println("约束配置加载成功")
+			} else {
+				fmt.Println("加载默认约束配置")
+				if err := utils.LoadDefaultConstraints(); err != nil {
+					fmt.Printf("加载默认约束配置失败: %v\n", err)
+					return
+				}
+				fmt.Println("默认约束配置加载成功")
+			}
+		}
 
 		// 解析报文并生成测试用例
-		var data map[string]interface{}
+		var data map[string]any
 		var err error
 
 		if isXML {
@@ -121,7 +147,12 @@ var localGenCmd = &cobra.Command{
 
 		// 生成测试用例
 		fmt.Println("正在生成测试用例...")
-		testCases := utils.GenerateTestCases(data, num)
+		var testCases []map[string]any
+		if useConstraints || constraintsFile != "" {
+			testCases = utils.GenerateTestCasesWithConstraints(data, num, true)
+		} else {
+			testCases = utils.GenerateTestCases(data, num)
+		}
 
 		// 根据格式转换数据
 		var csvData [][]string
@@ -139,7 +170,6 @@ var localGenCmd = &cobra.Command{
 			fmt.Printf("保存CSV文件失败: %v\n", err)
 			return
 		}
-
 		fmt.Printf("成功生成 %d 条测试用例并保存到 %s\n", num, output)
 	},
 }
@@ -154,6 +184,8 @@ func init() {
 	localGenCmd.Flags().BoolP("xml", "x", false, "使用XML格式")
 	localGenCmd.Flags().BoolP("json", "j", false, "使用JSON格式")
 	localGenCmd.Flags().StringP("output", "o", "", "输出文件路径（默认为当前目录下的test_cases.csv）")
+	localGenCmd.Flags().BoolP("constraints", "c", false, "启用智能约束模式（使用默认配置）")
+	localGenCmd.Flags().StringP("constraints-file", "C", "", "指定约束配置文件路径")
 
 	// 注意：raw和file参数互斥，在Run函数中进行验证
 }
