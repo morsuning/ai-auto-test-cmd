@@ -16,19 +16,19 @@ var genCmd = &cobra.Command{
 
 示例：
   # 根据正例xml报文生成10条测试用例
-  atc gen -u https://xxx.dify.com/xxx/xxx -xml -raw "xxxx" -n 10
+  atc gen -u https://xxx.dify.com/xxx/xxx --xml --raw "xxxx" -n 10
 
   # 根据正例json报文生成20条测试用例
-  atc gen -u https://xxx.dify.com/xxx/xxx -json -raw "xxxx" -n 20
+  atc gen -u https://xxx.dify.com/xxx/xxx --json --raw "xxxx" -n 20
 
   # 从XML文件读取正例报文生成测试用例
-  atc gen -u https://xxx.dify.com/xxx/xxx -xml -f example.xml -n 15
+  atc gen -u https://xxx.dify.com/xxx/xxx --xml -f example.xml -n 15
 
   # 从JSON文件读取正例报文生成测试用例
-  atc gen -u https://xxx.dify.com/xxx/xxx -json -f example.json -n 25
+  atc gen -u https://xxx.dify.com/xxx/xxx --json -f example.json -n 25
 
   # （可选）根据正例xml报文和接口文档生成5条正例报文
-  atc gen -u https://xxx.dify.com/xxx/xxx -xml -raw "xxxx" -n 5 -d xxx.xlsx -p`,
+  atc gen -u https://xxx.dify.com/xxx/xxx --xml --raw "xxxx" -n 5 -d xxx.xlsx -p`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// 获取命令行参数
 		url, _ := cmd.Flags().GetString("url")
@@ -42,11 +42,11 @@ var genCmd = &cobra.Command{
 
 		// 检查输入方式：必须指定raw或file其中之一
 		if raw == "" && file == "" {
-			fmt.Println("错误: 必须指定正例输入方式（-raw 或 -f）")
+			fmt.Println("错误: 必须指定正例输入方式（--raw 或 -f）")
 			return
 		}
 		if raw != "" && file != "" {
-			fmt.Println("错误: 不能同时指定 -raw 和 -f 参数")
+			fmt.Println("错误: 不能同时指定 --raw 和 -f 参数")
 			return
 		}
 
@@ -57,7 +57,7 @@ var genCmd = &cobra.Command{
 		} else if isJSON {
 			format = "json"
 		} else {
-			fmt.Println("错误: 必须指定报文格式（-xml 或 -json）")
+			fmt.Println("错误: 必须指定报文格式（--xml 或 --json）")
 			return
 		}
 

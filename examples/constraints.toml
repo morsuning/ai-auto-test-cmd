@@ -35,6 +35,35 @@ format = "20060102"
 min_date = "20200101"
 max_date = "20301231"
 
+# 日期时间字段约束（RFC 3339 Extended格式）
+[datetime]
+type = "datetime"
+min_datetime = "2020-01-01T00:00:00.000+00:00"
+max_datetime = "2030-12-31T23:59:59.999+00:00"
+timezone = "UTC"
+description = "RFC 3339 Extended格式的日期时间"
+
+[create_datetime]
+type = "datetime"
+min_datetime = "2020-01-01T00:00:00.000+08:00"
+max_datetime = "2030-12-31T23:59:59.999+08:00"
+timezone = "+08:00"
+description = "北京时间的日期时间"
+
+[update_datetime]
+type = "datetime"
+min_datetime = "2025-01-01T00:00:00.000Z"
+max_datetime = "2025-12-31T23:59:59.999Z"
+timezone = "Asia/Shanghai"
+description = "使用IANA时区的日期时间"
+
+[TxnDt]
+type = "datetime"
+min_datetime = "2024-01-01T00:00:00.000+00:00"
+max_datetime = "2025-12-31T23:59:59.999+00:00"
+timezone = "UTC"
+description = "交易日期时间，RFC 3339 Extended格式"
+
 # 姓名字段约束
 [name]
 type = "chinese_name"

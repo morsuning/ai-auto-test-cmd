@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -13,15 +14,18 @@ import (
 
 // FieldConstraint 字段约束配置
 type FieldConstraint struct {
-	Type        string   `toml:"type"`        // 约束类型
-	Format      string   `toml:"format"`      // 格式（用于日期等）
-	MinDate     string   `toml:"min_date"`    // 最小日期
-	MaxDate     string   `toml:"max_date"`    // 最大日期
-	Min         *float64 `toml:"min"`         // 最小值
-	Max         *float64 `toml:"max"`         // 最大值
-	Precision   *int     `toml:"precision"`   // 精度（小数位数）
-	KeepOriginal *bool   `toml:"keep_original"` // 是否保持原值不变
-	Description string   `toml:"description"` // 描述
+	Type         string   `toml:"type"`          // 约束类型
+	Format       string   `toml:"format"`        // 格式（用于日期等）
+	MinDate      string   `toml:"min_date"`      // 最小日期
+	MaxDate      string   `toml:"max_date"`      // 最大日期
+	MinDatetime  string   `toml:"min_datetime"`  // 最小日期时间（RFC 3339 Extended格式）
+	MaxDatetime  string   `toml:"max_datetime"`  // 最大日期时间（RFC 3339 Extended格式）
+	Timezone     string   `toml:"timezone"`      // 时区（如：+08:00, UTC, Asia/Shanghai）
+	Min          *float64 `toml:"min"`           // 最小值
+	Max          *float64 `toml:"max"`           // 最大值
+	Precision    *int     `toml:"precision"`     // 精度（小数位数）
+	KeepOriginal *bool    `toml:"keep_original"` // 是否保持原值不变
+	Description  string   `toml:"description"`   // 描述
 }
 
 // BuiltinData 内置数据集
@@ -98,7 +102,7 @@ func validateFieldConstraint(fieldName string, constraint FieldConstraint) []Val
 	var errors []ValidationError
 
 	// 验证约束类型
-	validTypes := []string{"date", "chinese_name", "phone", "email", "chinese_address", "id_card", "integer", "float", "keep_original"}
+	validTypes := []string{"date", "datetime", "chinese_name", "phone", "email", "chinese_address", "id_card", "integer", "float", "keep_original"}
 	if constraint.Type == "" {
 		errors = append(errors, ValidationError{
 			Field:   fieldName,
@@ -124,6 +128,8 @@ func validateFieldConstraint(fieldName string, constraint FieldConstraint) []Val
 	switch constraint.Type {
 	case "date":
 		errors = append(errors, validateDateConstraint(fieldName, constraint)...)
+	case "datetime":
+		errors = append(errors, validateDatetimeConstraint(fieldName, constraint)...)
 	case "integer":
 		errors = append(errors, validateIntegerConstraint(fieldName, constraint)...)
 	case "float":
@@ -177,6 +183,81 @@ func validateDateConstraint(fieldName string, constraint FieldConstraint) []Vali
 				Field:   fieldName,
 				Message: fmt.Sprintf("最大日期 '%s' 不能早于最小日期 '%s'", constraint.MaxDate, constraint.MinDate),
 			})
+		}
+	}
+
+	return errors
+}
+
+// validateDatetimeConstraint 验证日期时间约束
+func validateDatetimeConstraint(fieldName string, constraint FieldConstraint) []ValidationError {
+	var errors []ValidationError
+
+	// RFC 3339 Extended格式：2006-01-02T15:04:05.000Z07:00
+	rfc3339ExtendedFormat := "2006-01-02T15:04:05.000Z07:00"
+
+	// 验证最小日期时间
+	var minDatetime, maxDatetime time.Time
+	if constraint.MinDatetime != "" {
+		var err error
+		minDatetime, err = time.Parse(rfc3339ExtendedFormat, constraint.MinDatetime)
+		if err != nil {
+			// 尝试其他RFC 3339格式
+			minDatetime, err = time.Parse(time.RFC3339, constraint.MinDatetime)
+			if err != nil {
+				errors = append(errors, ValidationError{
+					Field:   fieldName,
+					Message: fmt.Sprintf("无效的最小日期时间格式 '%s'，应为 RFC 3339 Extended 格式（如：2025-07-08T12:43:21.000+00:00）", constraint.MinDatetime),
+				})
+			}
+		}
+	}
+
+	// 验证最大日期时间
+	if constraint.MaxDatetime != "" {
+		var err error
+		maxDatetime, err = time.Parse(rfc3339ExtendedFormat, constraint.MaxDatetime)
+		if err != nil {
+			// 尝试其他RFC 3339格式
+			maxDatetime, err = time.Parse(time.RFC3339, constraint.MaxDatetime)
+			if err != nil {
+				errors = append(errors, ValidationError{
+					Field:   fieldName,
+					Message: fmt.Sprintf("无效的最大日期时间格式 '%s'，应为 RFC 3339 Extended 格式（如：2025-07-08T12:43:21.000+00:00）", constraint.MaxDatetime),
+				})
+			} else if !minDatetime.IsZero() && maxDatetime.Before(minDatetime) {
+				errors = append(errors, ValidationError{
+					Field:   fieldName,
+					Message: fmt.Sprintf("最大日期时间 '%s' 不能早于最小日期时间 '%s'", constraint.MaxDatetime, constraint.MinDatetime),
+				})
+			}
+		} else if !minDatetime.IsZero() && maxDatetime.Before(minDatetime) {
+			errors = append(errors, ValidationError{
+				Field:   fieldName,
+				Message: fmt.Sprintf("最大日期时间 '%s' 不能早于最小日期时间 '%s'", constraint.MaxDatetime, constraint.MinDatetime),
+			})
+		}
+	}
+
+	// 验证时区格式
+	if constraint.Timezone != "" {
+		// 检查是否是有效的时区格式
+		if constraint.Timezone != "UTC" && !strings.HasPrefix(constraint.Timezone, "+") && !strings.HasPrefix(constraint.Timezone, "-") {
+			// 尝试加载时区
+			if _, err := time.LoadLocation(constraint.Timezone); err != nil {
+				errors = append(errors, ValidationError{
+					Field:   fieldName,
+					Message: fmt.Sprintf("无效的时区格式 '%s'，支持格式：UTC、+08:00、-05:00 或 IANA 时区名称（如：Asia/Shanghai）", constraint.Timezone),
+				})
+			}
+		} else if strings.HasPrefix(constraint.Timezone, "+") || strings.HasPrefix(constraint.Timezone, "-") {
+			// 验证偏移量格式（如：+08:00, -05:00）
+			if len(constraint.Timezone) != 6 || constraint.Timezone[3] != ':' {
+				errors = append(errors, ValidationError{
+					Field:   fieldName,
+					Message: fmt.Sprintf("无效的时区偏移量格式 '%s'，应为 ±HH:MM 格式（如：+08:00）", constraint.Timezone),
+				})
+			}
 		}
 	}
 
@@ -389,6 +470,21 @@ func FindFieldConstraint(fieldName string) *FieldConstraint {
 		return &constraint
 	}
 
+	// 尝试匹配简单字段名（去掉路径前缀）
+	if strings.Contains(fieldName, ".") {
+		parts := strings.Split(fieldName, ".")
+		simpleFieldName := parts[len(parts)-1] // 取最后一部分
+		if constraint, exists := globalConstraintConfig.Constraints[simpleFieldName]; exists {
+			return &constraint
+		}
+		
+		// 尝试简单字段名的小写匹配
+		lowerSimpleFieldName := strings.ToLower(simpleFieldName)
+		if constraint, exists := globalConstraintConfig.Constraints[lowerSimpleFieldName]; exists {
+			return &constraint
+		}
+	}
+
 	return nil
 }
 
@@ -408,6 +504,8 @@ func GenerateConstrainedValue(constraint *FieldConstraint, originalValue any) an
 		return originalValue
 	case "date":
 		return generateDateValue(constraint)
+	case "datetime":
+		return generateDatetimeValue(constraint)
 	case "chinese_name":
 		return generateChineseName()
 	case "phone":
@@ -451,6 +549,98 @@ func generateDateValue(constraint *FieldConstraint) string {
 	randomDate := minDate.Add(randomDuration)
 
 	return randomDate.Format(format)
+}
+
+// generateDatetimeValue 生成RFC 3339 Extended格式的日期时间值
+func generateDatetimeValue(constraint *FieldConstraint) string {
+	// 设置默认日期时间范围（包含时分秒）
+	minDatetime := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+	maxDatetime := time.Date(2030, 12, 31, 23, 59, 59, 999000000, time.UTC)
+
+	// RFC 3339 Extended格式
+	rfc3339ExtendedFormat := "2006-01-02T15:04:05.000Z07:00"
+
+	// 解析用户指定的日期时间范围
+	if constraint.MinDatetime != "" {
+		if parsed, err := time.Parse(rfc3339ExtendedFormat, constraint.MinDatetime); err == nil {
+			minDatetime = parsed
+		} else if parsed, err := time.Parse(time.RFC3339, constraint.MinDatetime); err == nil {
+			minDatetime = parsed
+		}
+	}
+	if constraint.MaxDatetime != "" {
+		if parsed, err := time.Parse(rfc3339ExtendedFormat, constraint.MaxDatetime); err == nil {
+			maxDatetime = parsed
+		} else if parsed, err := time.Parse(time.RFC3339, constraint.MaxDatetime); err == nil {
+			maxDatetime = parsed
+		}
+	}
+
+	// 生成随机日期时间（精确到毫秒）
+	diff := maxDatetime.UnixNano() - minDatetime.UnixNano()
+	randomNanos := rand.Int63n(diff + 1)
+	randomDatetime := time.Unix(0, minDatetime.UnixNano()+randomNanos)
+
+	// 处理时区
+	var targetTimezone *time.Location
+	if constraint.Timezone != "" {
+		if constraint.Timezone == "UTC" {
+			targetTimezone = time.UTC
+		} else if strings.HasPrefix(constraint.Timezone, "+") || strings.HasPrefix(constraint.Timezone, "-") {
+			// 解析偏移量格式（如：+08:00, -05:00）
+			if offset, err := parseTimezoneOffset(constraint.Timezone); err == nil {
+				targetTimezone = time.FixedZone("Custom", offset)
+			} else {
+				targetTimezone = time.UTC // 默认使用UTC
+			}
+		} else {
+			// IANA时区名称
+			if loc, err := time.LoadLocation(constraint.Timezone); err == nil {
+				targetTimezone = loc
+			} else {
+				targetTimezone = time.UTC // 默认使用UTC
+			}
+		}
+	} else {
+		// 默认使用UTC
+		targetTimezone = time.UTC
+	}
+
+	// 转换到目标时区
+	randomDatetime = randomDatetime.In(targetTimezone)
+
+	// 返回RFC 3339 Extended格式
+	return randomDatetime.Format("2006-01-02T15:04:05.000Z07:00")
+}
+
+// parseTimezoneOffset 解析时区偏移量（如：+08:00, -05:00）
+func parseTimezoneOffset(offset string) (int, error) {
+	if len(offset) != 6 || offset[3] != ':' {
+		return 0, fmt.Errorf("invalid timezone offset format: %s", offset)
+	}
+
+	sign := 1
+	if offset[0] == '-' {
+		sign = -1
+	} else if offset[0] != '+' {
+		return 0, fmt.Errorf("invalid timezone offset sign: %s", offset)
+	}
+
+	hours, err := strconv.Atoi(offset[1:3])
+	if err != nil {
+		return 0, fmt.Errorf("invalid hours in timezone offset: %s", offset)
+	}
+
+	minutes, err := strconv.Atoi(offset[4:6])
+	if err != nil {
+		return 0, fmt.Errorf("invalid minutes in timezone offset: %s", offset)
+	}
+
+	if hours < 0 || hours > 23 || minutes < 0 || minutes > 59 {
+		return 0, fmt.Errorf("invalid timezone offset values: %s", offset)
+	}
+
+	return sign * (hours*3600 + minutes*60), nil
 }
 
 // generateChineseName 生成中文姓名

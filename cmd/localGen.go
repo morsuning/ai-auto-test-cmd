@@ -16,22 +16,22 @@ var localGenCmd = &cobra.Command{
 
 示例：
   # 本地根据正例xml报文生成10条测试用例
-  atc local-gen -xml -raw "xxxx" -n 10
+  atc local-gen --xml --raw "xxxx" -n 10
 
   # 本地根据正例json报文生成15条测试用例
-  atc local-gen -json -raw "xxxx" -n 15
+  atc local-gen --json --raw "xxxx" -n 15
 
   # 从XML文件读取正例报文生成测试用例
-  atc local-gen -xml -f example.xml -n 20
+  atc local-gen --xml -f example.xml -n 20
 
   # 从JSON文件读取正例报文生成测试用例
-  atc local-gen -json -f example.json -n 25
+  atc local-gen --json -f example.json -n 25
 
   # 使用默认约束配置生成智能测试用例
-  atc local-gen -json -f example.json -n 10 --constraints
+  atc local-gen --json -f example.json -n 10 --constraints
 
   # 使用自定义约束配置文件生成测试用例
-  atc local-gen -json -f example.json -n 10 --constraints-file custom.toml`,
+  atc local-gen --json -f example.json -n 10 --constraints-file custom.toml`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// 获取命令行参数
 		raw, _ := cmd.Flags().GetString("raw")
@@ -45,11 +45,11 @@ var localGenCmd = &cobra.Command{
 
 		// 检查输入方式：必须指定raw或file其中之一
 		if raw == "" && file == "" {
-			fmt.Println("错误: 必须指定正例输入方式（-raw 或 -f）")
+			fmt.Println("错误: 必须指定正例输入方式（--raw 或 -f）")
 			return
 		}
 		if raw != "" && file != "" {
-			fmt.Println("错误: 不能同时指定 -raw 和 -f 参数")
+			fmt.Println("错误: 不能同时指定 --raw 和 -f 参数")
 			return
 		}
 
@@ -60,7 +60,7 @@ var localGenCmd = &cobra.Command{
 		} else if isJSON {
 			format = "json"
 		} else {
-			fmt.Println("错误: 必须指定报文格式（-xml 或 -json）")
+			fmt.Println("错误: 必须指定报文格式（--xml 或 --json）")
 			return
 		}
 
