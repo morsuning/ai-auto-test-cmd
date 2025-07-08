@@ -702,14 +702,8 @@ func GenerateTestCasesWithConstraints(data map[string]any, count int, useConstra
 		// 按原始顺序处理每个字段
 		for _, key := range keys {
 			if useConstraints {
-				// 尝试查找字段约束
-				if constraint := FindFieldConstraint(key); constraint != nil {
-					// 使用约束生成值
-					testCase[key] = GenerateConstrainedValue(constraint, data[key])
-				} else {
-					// 没有找到约束，使用原始变化逻辑
-					testCase[key] = generateVariation(data[key], 0.5)
-				}
+				// 使用带约束的变化生成
+				testCase[key] = generateVariationWithConstraints(data[key], key, 0.5)
 			} else {
 				// 不使用约束，使用原始变化逻辑
 				testCase[key] = generateVariation(data[key], 0.5) // 上下浮动50%
@@ -851,6 +845,67 @@ func generateVariation(value any, variationRate float64) any {
 	default:
 		// 其他类型，直接返回原值
 		return v
+	}
+}
+
+// generateVariationWithConstraints 根据约束生成变化值
+func generateVariationWithConstraints(value any, fieldName string, variationRate float64) any {
+	// 处理嵌套结构
+	switch v := value.(type) {
+	case map[string]any:
+		// 对象，先检查是否有针对整个对象的约束
+		if constraint := FindFieldConstraint(fieldName); constraint != nil {
+			// 如果是keep_original约束，需要特殊处理：保持原值但允许子字段覆盖
+			if constraint.Type == "keep_original" || (constraint.KeepOriginal != nil && *constraint.KeepOriginal) {
+				// 递归处理每个属性，子字段的约束优先
+				result := make(map[string]any)
+				for key, item := range v {
+					// 构建嵌套字段名
+					nestedFieldName := fieldName + "." + key
+					// 检查子字段是否有单独的约束
+					if childConstraint := FindFieldConstraint(nestedFieldName); childConstraint != nil {
+						// 子字段有约束，使用子字段约束
+						result[key] = generateVariationWithConstraints(item, nestedFieldName, variationRate)
+					} else if childConstraint := FindFieldConstraint(key); childConstraint != nil {
+						// 检查是否有直接字段名的约束
+						result[key] = generateVariationWithConstraints(item, key, variationRate)
+					} else {
+						// 子字段没有约束，保持原值
+						result[key] = item
+					}
+				}
+				return result
+			} else {
+				// 其他类型的约束，直接应用
+				return GenerateConstrainedValue(constraint, value)
+			}
+		} else {
+			// 没有针对整个对象的约束，递归处理每个属性
+			result := make(map[string]any)
+			for key, item := range v {
+				// 构建嵌套字段名
+				nestedFieldName := fieldName + "." + key
+				result[key] = generateVariationWithConstraints(item, nestedFieldName, variationRate)
+			}
+			return result
+		}
+	case []any:
+		// 数组，递归处理每个元素
+		result := make([]any, len(v))
+		for i, item := range v {
+			// 构建数组元素字段名
+			arrayFieldName := fmt.Sprintf("%s[%d]", fieldName, i)
+			result[i] = generateVariationWithConstraints(item, arrayFieldName, variationRate)
+		}
+		return result
+	default:
+		// 基本类型，尝试查找字段约束
+		if constraint := FindFieldConstraint(fieldName); constraint != nil {
+			// 使用约束生成值
+			return GenerateConstrainedValue(constraint, value)
+		}
+		// 没有约束，使用原始变化逻辑
+		return generateVariation(value, variationRate)
 	}
 }
 

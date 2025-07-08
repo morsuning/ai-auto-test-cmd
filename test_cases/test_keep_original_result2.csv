@@ -1,0 +1,7 @@
+XML
+"<?xml version=""1.0"" encoding=""UTF-8""?>
+<service> <Head> <SvcScn>9</SvcScn><CnsmrSysId>Z00203</CnsmrSysId><SvcCd>30510011</SvcCd><CnsmrSeqNo>Z0020</CnsmrSeqNo><TxnDt>20210822</TxnDt><FileFlg>0</FileFlg><SrcCnsmrSeqNo>10000025</SrcCnsmrSeqNo><SrcCnsmrSysId>Z00203</SrcCnsmrSysId><TxnTm>137</TxnTm></Head><Body> <IdentTp1>-1</IdentTp1><IdentNoS>478687885078489834</IdentNoS><TxnCnl>3</TxnCnl><IntfDoctnVerNo>eCJ</IntfDoctnVerNo></Body></service>"
+"<?xml version=""1.0"" encoding=""UTF-8""?>
+<service> <Head> <TxnTm>137</TxnTm><TxnDt>20291115</TxnDt><FileFlg>0</FileFlg><SvcScn>9</SvcScn><CnsmrSysId>Z00203</CnsmrSysId><SrcCnsmrSysId>Z00203</SrcCnsmrSysId><SvcCd>30510011</SvcCd><CnsmrSeqNo>Z0020</CnsmrSeqNo><SrcCnsmrSeqNo>10000025</SrcCnsmrSeqNo></Head><Body> <IdentNoS>255798847780293515</IdentNoS><TxnCnl>3</TxnCnl><IntfDoctnVerNo>fCJ</IntfDoctnVerNo><IdentTp1>0</IdentTp1></Body></service>"
+"<?xml version=""1.0"" encoding=""UTF-8""?>
+<service> <Head> <SrcCnsmrSeqNo>10000025</SrcCnsmrSeqNo><CnsmrSysId>Z00203</CnsmrSysId><SvcCd>30510011</SvcCd><FileFlg>0</FileFlg><TxnTm>137</TxnTm><SvcScn>9</SvcScn><SrcCnsmrSysId>Z00203</SrcCnsmrSysId><CnsmrSeqNo>Z0020</CnsmrSeqNo><TxnDt>20210802</TxnDt></Head><Body> <TxnCnl>1</TxnCnl><IntfDoctnVerNo>Jg</IntfDoctnVerNo><IdentTp1>0</IdentTp1><IdentNoS>373306778193621844</IdentNoS></Body></service>"

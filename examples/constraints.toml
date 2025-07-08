@@ -1,6 +1,20 @@
 # 智能约束系统配置文件
 # 通过字段名匹配来应用约束规则
 
+# 保持原值不变的字段约束
+# 适用于需要保持固定值的字段，如报文头部信息等
+[Head]
+type = "keep_original"
+description = "保持Head节点及其所有子字段的原值不变"
+
+[SvcCd]
+type = "keep_original"
+description = "保持服务代码原值不变"
+
+[SvcScn]
+type = "keep_original"
+description = "保持服务场景原值不变"
+
 # 日期字段约束
 [date]
 type = "date"

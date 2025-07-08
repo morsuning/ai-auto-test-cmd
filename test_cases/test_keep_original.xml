@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<service>
+  <Head>
+    <SvcCd>30510011</SvcCd>
+    <SvcScn>09</SvcScn>
+    <CnsmrSysId>Z00203</CnsmrSysId>
+    <CnsmrSeqNo>Z0020</CnsmrSeqNo>
+    <SrcCnsmrSysId>Z00203</SrcCnsmrSysId>
+    <SrcCnsmrSeqNo>10000025</SrcCnsmrSeqNo>
+    <TxnDt>20180606</TxnDt>
+    <TxnTm>000137</TxnTm>
+    <FileFlg>0</FileFlg>
+  </Head>
+  <Body>
+    <IdentTp1>0</IdentTp1>
+    <IdentNoS>340722194901218123</IdentNoS>
+    <TxnCnl>2</TxnCnl>
+    <IntfDoctnVerNo>JCJ</IntfDoctnVerNo>
+  </Body>
+</service>

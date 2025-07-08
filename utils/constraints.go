@@ -20,6 +20,7 @@ type FieldConstraint struct {
 	Min         *float64 `toml:"min"`         // 最小值
 	Max         *float64 `toml:"max"`         // 最大值
 	Precision   *int     `toml:"precision"`   // 精度（小数位数）
+	KeepOriginal *bool   `toml:"keep_original"` // 是否保持原值不变
 	Description string   `toml:"description"` // 描述
 }
 
@@ -97,7 +98,7 @@ func validateFieldConstraint(fieldName string, constraint FieldConstraint) []Val
 	var errors []ValidationError
 
 	// 验证约束类型
-	validTypes := []string{"date", "chinese_name", "phone", "email", "chinese_address", "id_card", "integer", "float"}
+	validTypes := []string{"date", "chinese_name", "phone", "email", "chinese_address", "id_card", "integer", "float", "keep_original"}
 	if constraint.Type == "" {
 		errors = append(errors, ValidationError{
 			Field:   fieldName,
@@ -397,7 +398,14 @@ func GenerateConstrainedValue(constraint *FieldConstraint, originalValue any) an
 		return originalValue
 	}
 
+	// 检查是否设置了保持原值不变
+	if constraint.KeepOriginal != nil && *constraint.KeepOriginal {
+		return originalValue
+	}
+
 	switch constraint.Type {
+	case "keep_original":
+		return originalValue
 	case "date":
 		return generateDateValue(constraint)
 	case "chinese_name":
