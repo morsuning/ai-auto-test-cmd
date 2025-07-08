@@ -120,7 +120,7 @@ atc local-gen [正例输入] [flags]
 **主要参数：**
 - `--json`: 指定JSON格式
 - `--xml`: 指定XML格式
-- `--count, -c`: 生成数量（默认5）
+- `--num, -n`: 生成数量（默认10）
 - `--file, -f`: 从文件读取正例
 - `--output, -o`: 输出文件路径
 - `--constraints`: 启用智能约束系统
@@ -129,13 +129,13 @@ atc local-gen [正例输入] [flags]
 **示例：**
 ```bash
 # 生成10个JSON测试用例
-atc local-gen '{"name":"张三","age":25}' --json -c 10
+atc local-gen '{"name":"张三","age":25}' --json -n 10
 
 # 使用约束系统生成真实数据
-atc local-gen '{"name":"张三","phone":"13800138000"}' --json --constraints -c 5
+atc local-gen '{"name":"张三","phone":"13800138000"}' --json --constraints -n 5
 
 # 从文件生成并保存到指定位置
-atc local-gen -f input.json --json -c 20 -o testcases.csv
+atc local-gen -f input.json --json -n 20 -o testcases.csv
 ```
 
 ### `request` - 批量接口测试
@@ -337,7 +337,6 @@ atc request -u https://api.example.com/users -m post -f users.csv --json --debug
 
 ## 🔗 相关链接
 
-- [项目需求文档](项目需求文档.md)
 - [问题反馈](https://github.com/morsuning/ai-auto-test-cmd/issues)
 - [功能请求](https://github.com/morsuning/ai-auto-test-cmd/issues/new?template=feature_request.md)
 - [English Documentation](README.md)

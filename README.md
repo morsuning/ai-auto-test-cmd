@@ -63,16 +63,16 @@ bash build/build.sh
 
 ```bash
 # Generate test cases from JSON positive example
-atc local-gen '{"name":"John","age":25,"email":"test@example.com"}' --json --count 10
+atc local-gen '{"name":"John","age":25,"email":"test@example.com"}' --json -n 10
 
 # Generate test cases from XML positive example
-atc local-gen '<user><name>John</name><age>25</age></user>' --xml --count 5
+atc local-gen '<user><name>John</name><age>25</age></user>' --xml -n 5
 
 # Read positive example from file and generate
-atc local-gen -f examples/json_example.json --json --count 20
+atc local-gen -f examples/json_example.json --json -n 20
 
 # Generate using smart constraint system
-atc local-gen -f examples/json_example.json --json --count 10 --constraints
+atc local-gen -f examples/json_example.json --json -n 10 --constraints
 ```
 
 ### 2. Execute Interface Testing
@@ -120,7 +120,7 @@ atc local-gen [positive_example] [flags]
 **Main Parameters:**
 - `--json`: Specify JSON format
 - `--xml`: Specify XML format
-- `--count, -c`: Generation count (default 5)
+- `--num, -n`: Generation count (default 10)
 - `--file, -f`: Read positive example from file
 - `--output, -o`: Output file path
 - `--constraints`: Enable smart constraint system
@@ -129,13 +129,13 @@ atc local-gen [positive_example] [flags]
 **Examples:**
 ```bash
 # Generate 10 JSON test cases
-atc local-gen '{"name":"John","age":25}' --json -c 10
+atc local-gen '{"name":"John","age":25}' --json -n 10
 
 # Use constraint system to generate realistic data
-atc local-gen '{"name":"张三","phone":"13800138000"}' --json --constraints -c 5
+atc local-gen '{"name":"张三","phone":"13800138000"}' --json --constraints -n 5
 
 # Generate from file and save to specified location
-atc local-gen -f input.json --json -c 20 -o testcases.csv
+atc local-gen -f input.json --json -n 20 -o testcases.csv
 ```
 
 ### `request` - Batch Interface Testing
@@ -337,7 +337,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🔗 Related Links
 
-- [Project Requirements Document](项目需求文档.md)
 - [Issue Feedback](https://github.com/morsuning/ai-auto-test-cmd/issues)
 - [Feature Requests](https://github.com/morsuning/ai-auto-test-cmd/issues/new?template=feature_request.md)
 - [中文文档](README_zh.md)
