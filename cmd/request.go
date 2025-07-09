@@ -2,6 +2,7 @@
 package cmd
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -16,13 +17,21 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// AuthConfig 鉴权配置结构体
+type AuthConfig struct {
+	BearerToken   string   // Bearer Token认证
+	BasicAuth     string   // Basic Auth认证（username:password格式）
+	APIKey        string   // API Key认证
+	CustomHeaders []string // 自定义HTTP头（Key: Value格式）
+}
+
 // requestCmd 表示批量请求目标系统接口的命令
 var requestCmd = &cobra.Command{
 	Use:   "request",
 	Short: "批量请求目标系统接口",
 	Long: `通过命令及本地的CSV文件，批量请求目标系统接口，返回执行结果，并且可以保存。
 
-示例：
+基本示例：
   # 根据测试用例文件xxx.csv,批量使用POST方法请求目标系统http接口，发送JSON格式数据
   atc request -u https://xxx.system.com/xxx/xxx -m post -f xxx.csv --json
 
@@ -32,8 +41,25 @@ var requestCmd = &cobra.Command{
   # 根据测试用例文件xxx.csv,批量使用GET方法请求目标系统http接口，结果默认保存至当前目录
   atc request -u https://xxx.system.com/xxx/xxx -m get -f xxx.csv --json -s
 
-  # 根据测试用例文件xxx.csv,批量使用GET方法请求目标系统http接口，结果保存至指定目录及文件
-  atc request -u https://xxx.system.com/xxx/xxx -m get -f xxx.csv --json -s /xxx/tool/result.csv`,
+  # 启用调试模式，详细输出每个请求的URL、HTTP头和请求体信息，以及响应详情
+  atc request -u https://xxx.system.com/xxx/xxx -m post -f xxx.csv --json --debug
+
+鉴权示例：
+  # 使用Bearer Token鉴权发送请求
+  atc request -u https://xxx.system.com/xxx/xxx -m post -f xxx.csv --json --auth-bearer "your_token_here"
+
+  # 使用Basic Auth鉴权发送请求
+  atc request -u https://xxx.system.com/xxx/xxx -m post -f xxx.csv --json --auth-basic "username:password"
+
+  # 使用API Key鉴权发送请求
+  atc request -u https://xxx.system.com/xxx/xxx -m post -f xxx.csv --json --auth-api-key "your_api_key"
+
+自定义HTTP头示例：
+  # 添加自定义HTTP头发送请求
+  atc request -u https://xxx.system.com/xxx/xxx -m post -f xxx.csv --json --header "X-API-Key: your_api_key" --header "X-Client-Version: 1.0"
+
+  # 组合使用鉴权和自定义头
+  atc request -u https://xxx.system.com/xxx/xxx -m post -f xxx.csv --json --auth-bearer "token" --header "X-Request-ID: 12345"`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// 获取命令行参数
 		url, _ := cmd.Flags().GetString("url")
@@ -44,6 +70,12 @@ var requestCmd = &cobra.Command{
 		timeout, _ := cmd.Flags().GetInt("timeout")
 		concurrent, _ := cmd.Flags().GetInt("concurrent")
 		debug, _ := cmd.Flags().GetBool("debug")
+
+		// 获取鉴权参数
+		authBearer, _ := cmd.Flags().GetString("auth-bearer")
+		authBasic, _ := cmd.Flags().GetString("auth-basic")
+		authAPIKey, _ := cmd.Flags().GetString("auth-api-key")
+		customHeaders, _ := cmd.Flags().GetStringSlice("header")
 
 		// 获取请求体格式参数
 		isXML, _ := cmd.Flags().GetBool("xml")
@@ -82,8 +114,16 @@ var requestCmd = &cobra.Command{
 		fmt.Printf("请求超时时间: %d秒\n", timeout)
 		fmt.Println()
 
+		// 构建鉴权配置
+		authConfig := AuthConfig{
+			BearerToken: authBearer,
+			BasicAuth:   authBasic,
+			APIKey:      authAPIKey,
+			CustomHeaders: customHeaders,
+		}
+
 		// 执行批量请求
-		if err := executeBatchRequests(url, method, filePath, save, savePath, timeout, concurrent, contentType, debug); err != nil {
+		if err := executeBatchRequestsWithAuth(url, method, filePath, save, savePath, timeout, concurrent, contentType, debug, authConfig); err != nil {
 			fmt.Printf("❌ 执行失败: %v\n", err)
 			os.Exit(1)
 		}
@@ -109,13 +149,21 @@ func init() {
 	// 调试参数
 	requestCmd.Flags().Bool("debug", false, "启用调试模式，输出详细的请求信息")
 
+	// 鉴权参数
+	requestCmd.Flags().String("auth-bearer", "", "Bearer Token认证，格式：--auth-bearer \"your_token_here\"")
+	requestCmd.Flags().String("auth-basic", "", "Basic Auth认证，格式：--auth-basic \"username:password\"")
+	requestCmd.Flags().String("auth-api-key", "", "API Key认证（通过X-API-Key头），格式：--auth-api-key \"your_api_key\"")
+
+	// 自定义HTTP头参数
+	requestCmd.Flags().StringSlice("header", []string{}, "自定义HTTP头，格式：--header \"Key: Value\"，可多次使用")
+
 	// 标记必需的参数
 	requestCmd.MarkFlagRequired("url")
 	requestCmd.MarkFlagRequired("file")
 }
 
-// executeBatchRequests 执行批量请求
-func executeBatchRequests(url, method, filePath string, save bool, savePath string, timeout, concurrent int, contentType string, debug bool) error {
+// executeBatchRequestsWithAuth 执行批量请求（支持鉴权）
+func executeBatchRequestsWithAuth(url, method, filePath string, save bool, savePath string, timeout, concurrent int, contentType string, debug bool, authConfig AuthConfig) error {
 	// 读取CSV文件
 	fmt.Println("📖 正在读取测试用例文件...")
 	data, err := utils.ReadCSV(filePath)
@@ -136,7 +184,12 @@ func executeBatchRequests(url, method, filePath string, save bool, savePath stri
 	fmt.Printf("✅ 成功读取 %d 个测试用例\n\n", len(testCases))
 
 	// 构建HTTP请求
-	requests := buildHTTPRequests(testCases, url, method, timeout, contentType)
+	useJSON := strings.ToLower(contentType) == "json"
+	useXML := strings.ToLower(contentType) == "xml"
+	requests, err := buildHTTPRequestsWithAuth(testCases, url, method, timeout, useJSON, useXML, authConfig)
+	if err != nil {
+		return err
+	}
 
 	// 如果启用调试模式，输出请求详情
 	if debug {
@@ -245,8 +298,8 @@ func parseValue(value string) any {
 	return value
 }
 
-// buildHTTPRequests 构建HTTP请求
-func buildHTTPRequests(testCases []models.TestCase, url, method string, timeout int, contentType string) []utils.HTTPRequest {
+// buildHTTPRequestsWithAuth 构建HTTP请求列表（支持鉴权）
+func buildHTTPRequestsWithAuth(testCases []models.TestCase, url, method string, timeout int, useJSON, useXML bool, authConfig AuthConfig) ([]utils.HTTPRequest, error) {
 	requests := make([]utils.HTTPRequest, len(testCases))
 
 	for i, testCase := range testCases {
@@ -254,9 +307,14 @@ func buildHTTPRequests(testCases []models.TestCase, url, method string, timeout 
 		body := ""
 		headers := make(map[string]string)
 
+		// 应用鉴权配置
+		if err := applyAuthConfig(headers, authConfig); err != nil {
+			return nil, err
+		}
+
 		if strings.ToUpper(method) == "POST" {
-			// POST请求，根据contentType格式化数据
-			if strings.ToLower(contentType) == "xml" {
+			// POST请求，根据格式化数据
+			if useXML {
 				// XML格式
 				if xmlContent, exists := testCase.Data["_xml_content"]; exists {
 					// 直接使用XML内容
@@ -322,14 +380,63 @@ func buildHTTPRequests(testCases []models.TestCase, url, method string, timeout 
 
 		requests[i] = utils.HTTPRequest{
 			URL:     url,
-			Method:  strings.ToUpper(method),
+			Method:  method,
 			Headers: headers,
 			Body:    body,
 			Timeout: timeout,
 		}
 	}
 
-	return requests
+	return requests, nil
+}
+
+// applyAuthConfig 应用鉴权配置到HTTP头
+func applyAuthConfig(headers map[string]string, authConfig AuthConfig) error {
+	// 应用Bearer Token认证
+	if authConfig.BearerToken != "" {
+		headers["Authorization"] = "Bearer " + authConfig.BearerToken
+	}
+
+	// 应用Basic Auth认证
+	if authConfig.BasicAuth != "" {
+		// 解析username:password格式
+		parts := strings.SplitN(authConfig.BasicAuth, ":", 2)
+		if len(parts) == 2 {
+			// 编码为Base64
+			credentials := base64.StdEncoding.EncodeToString([]byte(authConfig.BasicAuth))
+			headers["Authorization"] = "Basic " + credentials
+		} else {
+			fmt.Printf("⚠️  警告: Basic Auth格式不正确，应为 'username:password'，跳过Basic Auth认证\n")
+		}
+	}
+
+	// 应用API Key认证
+	if authConfig.APIKey != "" {
+		parts := strings.SplitN(authConfig.APIKey, ":", 2)
+		if len(parts) == 2 {
+			headers[parts[0]] = parts[1]
+		} else {
+			// 如果格式不正确，默认使用X-API-Key作为header名
+			headers["X-API-Key"] = authConfig.APIKey
+		}
+	}
+
+	// 应用自定义HTTP头
+	for _, header := range authConfig.CustomHeaders {
+		// 解析Key: Value格式
+		parts := strings.SplitN(header, ":", 2)
+		if len(parts) != 2 {
+			return fmt.Errorf("自定义HTTP头格式错误: %s，正确格式应为 'HeaderName: HeaderValue'", header)
+		}
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+		if key == "" {
+			return fmt.Errorf("自定义HTTP头名称不能为空: %s", header)
+		}
+		headers[key] = value
+	}
+
+	return nil
 }
 
 // processResponses 处理响应结果

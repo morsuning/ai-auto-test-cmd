@@ -30,6 +30,16 @@ ATC (API Test Command) is a powerful API automation testing command-line tool de
 
 ## 📦 Installation
 
+### System Requirements
+
+**Important**: This tool uses emoji characters (✅, ❌, 🔍, etc.) in its output for better user experience. To display these characters correctly, your terminal environment must support UTF-8 encoding.
+
+- **Windows**: Use Windows Terminal, PowerShell Core, or enable UTF-8 support in Command Prompt
+- **macOS/Linux**: Most modern terminals support UTF-8 by default
+- **SSH/Remote**: Ensure your SSH client and server both support UTF-8 encoding
+
+If emoji characters are not displayed correctly, please check your terminal's encoding settings.
+
 ### Pre-compiled Binary Files
 
 Download the pre-compiled version suitable for your system from the [Releases](https://github.com/morsuning/ai-auto-test-cmd/releases) page:
