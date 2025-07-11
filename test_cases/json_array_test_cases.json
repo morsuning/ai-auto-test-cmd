@@ -1,0 +1,27 @@
+[
+  {
+    "data_field": 12345
+  },
+  {
+    "data_field": "test_user"
+  },
+  {
+    "data_field": "test@example.com"
+  },
+  {
+    "user_id": 67890,
+    "username": "admin",
+    "email": "admin@example.com"
+  },
+  {
+    "profile": {
+      "name": "李四",
+      "age": 30,
+      "city": "上海"
+    },
+    "preferences": {
+      "language": "en-US",
+      "theme": "light"
+    }
+  }
+]

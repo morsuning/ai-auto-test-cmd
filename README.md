@@ -11,6 +11,7 @@ ATC (API Test Command) is a powerful API automation testing command-line tool de
 ## ✨ Core Features
 
 ### 🎯 Intelligent Test Case Generation
+- **Dify Chatflow API Generation**: Support calling Dify API to generate high-quality API test cases
 - **Local Generation**: Rapidly generate diverse test cases based on positive examples
 - **Smart Constraint System**: Supports 11 constraint types, generating realistic and valid Chinese test data
 - **Multi-format Support**: Supports JSON and XML input/output formats
@@ -69,7 +70,19 @@ bash build/build.sh
 
 ## 🚀 Quick Start
 
-### 1. Generate Test Cases
+### 1. Generate Test Cases via Dify Chatflow API
+
+Use the `dify-gen` command to call Dify Chatflow API to generate test cases:
+
+```bash
+# Generate test cases using Dify API
+atc dify-gen "User registration API" --api-key your_api_key --base-url https://api.dify.ai/v1 --user user123
+
+# Generate with custom parameters
+atc dify-gen "User login API" --api-key your_api_key --base-url https://api.dify.ai/v1 --user user123 --inputs '{"format":"json","count":10}'
+```
+
+### 2. Generate Test Cases Locally
 
 ```bash
 # Generate test cases from JSON positive example

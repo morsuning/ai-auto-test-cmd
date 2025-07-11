@@ -7,15 +7,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
-
-
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "atc",
 	Short: "API自动化测试命令行工具",
 	Long: `API自动化测试命令行工具(atc)是一个用于简化API测试流程的工具，支持以下功能：
 
-1. 通过Dify Workflow API生成测试用例
+1. 通过Dify Chatflow API生成测试用例
 2. 本地生成测试用例
 3. 批量执行测试请求并保存结果
 
@@ -43,5 +41,3 @@ func init() {
 	// 注意：子命令已在各自的init函数中添加到根命令
 	// genCmd, localGenCmd, requestCmd已在各自的文件中通过init函数添加
 }
-
-

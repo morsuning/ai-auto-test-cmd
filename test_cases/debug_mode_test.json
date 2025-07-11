@@ -1,0 +1,15 @@
+{
+  "user_id": 12345,
+  "username": "test_user",
+  "email": "test@example.com",
+  "profile": {
+    "name": "张三",
+    "age": 25,
+    "city": "北京"
+  },
+  "preferences": {
+    "language": "zh-CN",
+    "theme": "dark",
+    "notifications": true
+  }
+}
