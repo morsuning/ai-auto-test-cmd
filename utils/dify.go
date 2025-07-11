@@ -423,15 +423,21 @@ func generateRandomString(length int) string {
 }
 
 // parseGeneratedTestCases 解析生成的测试用例文本
-// 支持两种格式：
-// 1. JSON Array格式：[{"data_field": value1}, {"data_field": value2}]
-// 2. 传统的逐行格式（向后兼容）
+// 支持多种格式：
+// JSON格式：
+//   1. JSON Array格式：[{"data_field": value1}, {"data_field": value2}]
+//   2. 连续JSON对象格式：{...} {...} {...}
+// XML格式：
+//   1. 连续XML对象格式：<root>...</root> <root>...</root> <root>...</root>
+// 通用格式：
+//   1. 传统的逐行格式（向后兼容）
 func parseGeneratedTestCases(text, format string) []string {
 	var testCases []string
 	seenTestCases := make(map[string]bool) // 用于去重
 
-	// 首先尝试解析JSON Array格式
+	// JSON格式的智能解析
 	if format == "json" {
+		// 首先尝试解析JSON Array格式
 		if arrayTestCases := parseJSONArrayTestCases(text); len(arrayTestCases) > 0 {
 			// 成功解析JSON Array格式，进行去重处理
 			for _, testCase := range arrayTestCases {
@@ -442,9 +448,36 @@ func parseGeneratedTestCases(text, format string) []string {
 			}
 			return testCases
 		}
+
+		// 如果JSON Array解析失败，尝试解析连续JSON对象格式
+		if consecutiveTestCases := parseConsecutiveJSONObjects(text); len(consecutiveTestCases) > 0 {
+			// 成功解析连续JSON对象格式，进行去重处理
+			for _, testCase := range consecutiveTestCases {
+				if !seenTestCases[testCase] {
+					testCases = append(testCases, testCase)
+					seenTestCases[testCase] = true
+				}
+			}
+			return testCases
+		}
 	}
 
-	// 如果JSON Array解析失败或格式为XML，使用传统的逐行解析方式（向后兼容）
+	// XML格式的智能解析
+	if format == "xml" {
+		// 尝试解析连续XML对象格式
+		if consecutiveTestCases := parseConsecutiveXMLObjects(text); len(consecutiveTestCases) > 0 {
+			// 成功解析连续XML对象格式，进行去重处理
+			for _, testCase := range consecutiveTestCases {
+				if !seenTestCases[testCase] {
+					testCases = append(testCases, testCase)
+					seenTestCases[testCase] = true
+				}
+			}
+			return testCases
+		}
+	}
+
+	// 如果智能解析都失败，使用传统的逐行解析方式（向后兼容）
 	lines := strings.Split(text, "\n")
 	inCodeBlock := false
 
@@ -577,4 +610,318 @@ func extractJSONArrayFromText(text string) string {
 func isValidJSONArray(text string) bool {
 	var jsonArray []any
 	return json.Unmarshal([]byte(text), &jsonArray) == nil
+}
+
+// parseConsecutiveJSONObjects 解析连续JSON对象格式的测试用例
+// 输入格式：{"name": "张三"} {"name": "李四"} ...
+// 输出：每个JSON对象的字符串表示
+func parseConsecutiveJSONObjects(text string) []string {
+	var testCases []string
+	
+	// 提取连续JSON对象内容（支持markdown代码块包装）
+	jsonObjectsText := extractConsecutiveJSONFromText(text)
+	if jsonObjectsText == "" {
+		return testCases
+	}
+
+	// 解析连续的JSON对象
+	jsonObjects := splitConsecutiveJSONObjects(jsonObjectsText)
+	
+	// 验证并添加每个JSON对象
+	for i, jsonStr := range jsonObjects {
+		jsonStr = strings.TrimSpace(jsonStr)
+		if jsonStr == "" {
+			continue
+		}
+		
+		// 验证JSON格式
+		if ValidateJSONFormat(jsonStr) == nil {
+			testCases = append(testCases, jsonStr)
+		} else {
+			fmt.Printf("⚠️  跳过无效的JSON对象 %d: %s\n", i+1, jsonStr)
+		}
+	}
+
+	return testCases
+}
+
+// extractConsecutiveJSONFromText 从文本中提取连续JSON对象内容
+// 支持从markdown代码块中提取，也支持直接的连续JSON对象文本
+func extractConsecutiveJSONFromText(text string) string {
+	lines := strings.Split(text, "\n")
+	inCodeBlock := false
+	var jsonLines []string
+
+	// 首先尝试从markdown代码块中提取
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		
+		// 处理markdown代码块标记
+		if strings.HasPrefix(line, "```") {
+			inCodeBlock = !inCodeBlock
+			continue
+		}
+
+		// 收集代码块内的内容
+		if inCodeBlock && line != "" {
+			jsonLines = append(jsonLines, line)
+		}
+	}
+
+	// 如果从代码块中提取到内容，返回合并的文本
+	if len(jsonLines) > 0 {
+		jsonText := strings.Join(jsonLines, " ")
+		if containsConsecutiveJSONObjects(jsonText) {
+			return jsonText
+		}
+	}
+
+	// 如果代码块解析失败，尝试直接从整个文本中查找连续JSON对象
+	cleanText := strings.TrimSpace(text)
+	if containsConsecutiveJSONObjects(cleanText) {
+		return cleanText
+	}
+
+	return ""
+}
+
+// splitConsecutiveJSONObjects 分割连续的JSON对象
+// 使用简单的大括号匹配来分割JSON对象
+func splitConsecutiveJSONObjects(text string) []string {
+	var jsonObjects []string
+	var currentObject strings.Builder
+	braceCount := 0
+	inString := false
+	escaped := false
+
+	for _, char := range text {
+		if escaped {
+			escaped = false
+			currentObject.WriteRune(char)
+			continue
+		}
+
+		if char == '\\' {
+			escaped = true
+			currentObject.WriteRune(char)
+			continue
+		}
+
+		if char == '"' {
+			inString = !inString
+			currentObject.WriteRune(char)
+			continue
+		}
+
+		if !inString {
+			if char == '{' {
+				braceCount++
+				currentObject.WriteRune(char)
+			} else if char == '}' {
+				braceCount--
+				currentObject.WriteRune(char)
+				
+				// 当大括号匹配完成时，表示一个JSON对象结束
+				if braceCount == 0 {
+					jsonObj := strings.TrimSpace(currentObject.String())
+					if jsonObj != "" {
+						jsonObjects = append(jsonObjects, jsonObj)
+					}
+					currentObject.Reset()
+				}
+			} else if braceCount > 0 {
+				// 只有在JSON对象内部时才添加字符
+				currentObject.WriteRune(char)
+			}
+			// 忽略JSON对象外部的空白字符
+		} else {
+			// 在字符串内部，添加所有字符
+			currentObject.WriteRune(char)
+		}
+	}
+
+	return jsonObjects
+}
+
+// containsConsecutiveJSONObjects 检查文本是否包含连续的JSON对象
+// 简单检查：至少包含两个独立的JSON对象（以}开头的{结尾）
+func containsConsecutiveJSONObjects(text string) bool {
+	// 移除所有空白字符进行简单检查
+	cleanText := strings.ReplaceAll(text, " ", "")
+	cleanText = strings.ReplaceAll(cleanText, "\n", "")
+	cleanText = strings.ReplaceAll(cleanText, "\t", "")
+	
+	// 检查是否包含至少一个完整的JSON对象模式
+	// 简单模式：}{ 表示两个连续的JSON对象
+	return strings.Contains(cleanText, "}{")
+}
+
+// parseConsecutiveXMLObjects 解析连续XML对象格式的测试用例
+// 输入格式：<user><name>张三</name></user> <user><name>李四</name></user> ...
+// 输出：每个XML对象的字符串表示
+func parseConsecutiveXMLObjects(text string) []string {
+	var testCases []string
+	
+	// 提取连续XML对象内容（支持markdown代码块包装）
+	xmlObjectsText := extractConsecutiveXMLFromText(text)
+	if xmlObjectsText == "" {
+		return testCases
+	}
+
+	// 解析连续的XML对象
+	xmlObjects := splitConsecutiveXMLObjects(xmlObjectsText)
+	
+	// 验证并添加每个XML对象
+	for i, xmlStr := range xmlObjects {
+		xmlStr = strings.TrimSpace(xmlStr)
+		if xmlStr == "" {
+			continue
+		}
+		
+		// 验证XML格式
+		if ValidateXMLFormat(xmlStr) == nil {
+			testCases = append(testCases, xmlStr)
+		} else {
+			fmt.Printf("⚠️  跳过无效的XML对象 %d: %s\n", i+1, xmlStr)
+		}
+	}
+
+	return testCases
+}
+
+// extractConsecutiveXMLFromText 从文本中提取连续XML对象内容
+// 支持从markdown代码块中提取，也支持直接的连续XML对象文本
+func extractConsecutiveXMLFromText(text string) string {
+	lines := strings.Split(text, "\n")
+	inCodeBlock := false
+	var xmlLines []string
+
+	// 首先尝试从markdown代码块中提取
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		
+		// 处理markdown代码块标记
+		if strings.HasPrefix(line, "```") {
+			inCodeBlock = !inCodeBlock
+			continue
+		}
+
+		// 收集代码块内的内容
+		if inCodeBlock && line != "" {
+			xmlLines = append(xmlLines, line)
+		}
+	}
+
+	// 如果从代码块中提取到内容，返回合并的文本
+	if len(xmlLines) > 0 {
+		xmlText := strings.Join(xmlLines, " ")
+		if containsConsecutiveXMLObjects(xmlText) {
+			return xmlText
+		}
+	}
+
+	// 如果代码块解析失败，尝试直接从整个文本中查找连续XML对象
+	cleanText := strings.TrimSpace(text)
+	if containsConsecutiveXMLObjects(cleanText) {
+		return cleanText
+	}
+
+	return ""
+}
+
+// splitConsecutiveXMLObjects 分割连续的XML对象
+// 使用简单的标签匹配来分割XML对象
+func splitConsecutiveXMLObjects(text string) []string {
+	var xmlObjects []string
+	var currentObject strings.Builder
+	tagStack := []string{}
+	inTag := false
+	inClosingTag := false
+	var tagName strings.Builder
+
+	for _, char := range text {
+		if char == '<' {
+			inTag = true
+			inClosingTag = false
+			tagName.Reset()
+			currentObject.WriteRune(char)
+		} else if char == '>' && inTag {
+			inTag = false
+			currentObject.WriteRune(char)
+			
+			tag := tagName.String()
+			if inClosingTag {
+				// 处理结束标签
+				if len(tagStack) > 0 && tagStack[len(tagStack)-1] == tag {
+					// 弹出匹配的开始标签
+					tagStack = tagStack[:len(tagStack)-1]
+					
+					// 如果标签栈为空，表示一个完整的XML对象结束
+					if len(tagStack) == 0 {
+						xmlObj := strings.TrimSpace(currentObject.String())
+						if xmlObj != "" {
+							xmlObjects = append(xmlObjects, xmlObj)
+						}
+						currentObject.Reset()
+					}
+				}
+			} else if !strings.HasSuffix(tag, "/") {
+				// 处理开始标签（非自闭合标签）
+				tagStack = append(tagStack, tag)
+			}
+			// 自闭合标签不需要特殊处理
+		} else if inTag {
+			if char == '/' && tagName.Len() == 0 {
+				// 这是一个结束标签
+				inClosingTag = true
+			} else if char != '/' || tagName.Len() > 0 {
+				// 收集标签名（排除自闭合标签的斜杠）
+				if char != ' ' && char != '\t' && char != '\n' && char != '\r' {
+					if char == '/' && tagName.Len() > 0 {
+						// 自闭合标签的结束斜杠，不添加到标签名
+					} else if char != '/' {
+						tagName.WriteRune(char)
+					}
+				}
+			}
+			currentObject.WriteRune(char)
+		} else {
+			// 在标签外部，只有在XML对象内部时才添加字符
+			if len(tagStack) > 0 || currentObject.Len() > 0 {
+				currentObject.WriteRune(char)
+			}
+		}
+	}
+
+	return xmlObjects
+}
+
+// containsConsecutiveXMLObjects 检查文本是否包含连续的XML对象
+// 简单检查：至少包含两个独立的XML对象
+func containsConsecutiveXMLObjects(text string) bool {
+	// 移除所有空白字符进行简单检查
+	cleanText := strings.ReplaceAll(text, " ", "")
+	cleanText = strings.ReplaceAll(cleanText, "\n", "")
+	cleanText = strings.ReplaceAll(cleanText, "\t", "")
+	
+	// 简单检查：查找 ><< 模式，表示一个XML对象结束后紧跟另一个开始
+	// 或者查找多个根级别的开始标签
+	tagCount := 0
+	inTag := false
+	for i, char := range cleanText {
+		if char == '<' && !inTag {
+			inTag = true
+			// 检查是否为结束标签
+			if i+1 < len(cleanText) && cleanText[i+1] != '/' {
+				tagCount++
+				if tagCount >= 2 {
+					return true
+				}
+			}
+		} else if char == '>' {
+			inTag = false
+		}
+	}
+	
+	return false
 }
