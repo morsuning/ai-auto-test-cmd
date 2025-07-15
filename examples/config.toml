@@ -1,0 +1,9 @@
+# 测试配置文件
+# 用于验证dify-gen命令的配置文件读取功能
+
+[dify]
+# 测试用的Dify API Base URL
+url = "http://localhost/v1"
+
+# 测试用的Dify API Key
+api_key = "app-uS9lBUYnv2Flm6mOylxhggy7"

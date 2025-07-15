@@ -31,9 +31,15 @@ var requestCmd = &cobra.Command{
 	Short: "批量请求目标系统接口",
 	Long: `通过命令及本地的CSV文件，批量请求目标系统接口，返回执行结果，并且可以保存。
 
+注意：如果URL未指定协议（http://或https://），系统将自动添加http://前缀。
+例如：localhost:8080/user 将被处理为 http://localhost:8080/user
+
 基本示例：
   # 根据测试用例文件xxx.csv,批量使用POST方法请求目标系统http接口，发送JSON格式数据
   atc request -u https://xxx.system.com/xxx/xxx -m post -f xxx.csv --json
+
+  # 使用本地服务器（自动添加http://协议）
+  atc request -u localhost:8080/api/test -m post -f xxx.csv --json
 
   # 根据测试用例文件xxx.csv,批量使用POST方法请求目标系统http接口，发送XML格式数据
   atc request -u https://xxx.system.com/xxx/xxx -m post -f xxx.csv --xml
@@ -203,7 +209,7 @@ func executeBatchRequestsWithAuth(url, method, filePath string, save bool, saveP
 	duration := time.Since(start)
 
 	// 处理响应结果
-	results := processResponses(testCases, responses)
+	results := processResponses(testCases, responses, requests)
 
 	// 显示结果统计
 	displayResults(results, duration, debug)
@@ -300,6 +306,12 @@ func parseValue(value string) any {
 
 // buildHTTPRequestsWithAuth 构建HTTP请求列表（支持鉴权）
 func buildHTTPRequestsWithAuth(testCases []models.TestCase, url, method string, timeout int, useJSON, useXML bool, authConfig AuthConfig) ([]utils.HTTPRequest, error) {
+	// 检查并添加默认协议
+	if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
+		url = "http://" + url
+		fmt.Printf("ℹ️  URL 未指定协议，默认使用 HTTP: %s\n", url)
+	}
+
 	requests := make([]utils.HTTPRequest, len(testCases))
 
 	for i, testCase := range testCases {
@@ -380,7 +392,7 @@ func buildHTTPRequestsWithAuth(testCases []models.TestCase, url, method string, 
 
 		requests[i] = utils.HTTPRequest{
 			URL:     url,
-			Method:  method,
+			Method:  strings.ToUpper(method),
 			Headers: headers,
 			Body:    body,
 			Timeout: timeout,
@@ -440,7 +452,7 @@ func applyAuthConfig(headers map[string]string, authConfig AuthConfig) error {
 }
 
 // processResponses 处理响应结果
-func processResponses(testCases []models.TestCase, responses []utils.HTTPResponse) []models.TestResult {
+func processResponses(testCases []models.TestCase, responses []utils.HTTPResponse, requests []utils.HTTPRequest) []models.TestResult {
 	results := make([]models.TestResult, len(testCases))
 
 	for i, response := range responses {
@@ -448,7 +460,13 @@ func processResponses(testCases []models.TestCase, responses []utils.HTTPRespons
 			TestCaseID:   testCases[i].ID,
 			StatusCode:   response.StatusCode,
 			ResponseBody: response.Body,
+			RequestBody:  "", // 默认为空，下面会设置
 			Duration:     response.Duration.Milliseconds(),
+		}
+
+		// 设置原始请求报文
+		if i < len(requests) {
+			result.RequestBody = requests[i].Body
 		}
 
 		if response.Error != nil {
@@ -520,15 +538,16 @@ func saveResults(results []models.TestResult, savePath string) error {
 
 	// 构建CSV数据
 	csvData := [][]string{
-		{"测试用例ID", "是否成功", "状态码", "响应体", "错误信息", "耗时(ms)"},
+		{"测试用例ID", "原始请求报文", "响应体", "是否成功", "状态码", "错误信息", "耗时(ms)"},
 	}
 
 	for _, result := range results {
 		row := []string{
 			result.TestCaseID,
+			result.RequestBody,
+			result.ResponseBody,
 			strconv.FormatBool(result.Success),
 			strconv.Itoa(result.StatusCode),
-			result.ResponseBody,
 			result.Error,
 			strconv.FormatInt(result.Duration, 10),
 		}

@@ -18,33 +18,94 @@ var difyGenCmd = &cobra.Command{
   # 根据正例xml报文生成5条测试用例
 	atc dify-gen -u http://localhost/v1 --api-key app-xxx --xml --raw "xxxx" -n 5
 
-	# 根据正例json报文生成8条测试用例（最大限制）
-	atc dify-gen -u http://localhost/v1 --api-key app-xxx --json --raw "xxxx" -n 8
+	# 根据正例json报文生成10条测试用例（最大限制）
+	atc dify-gen -u http://localhost/v1 --api-key app-xxx --json --raw "xxxx" -n 10
 
 	# 从XML文件读取正例报文生成测试用例
 	atc dify-gen -u http://localhost/v1 --api-key app-xxx --xml -f example.xml -n 6
 
 	# 从JSON文件读取正例报文生成测试用例
-	atc dify-gen -u http://localhost/v1 --api-key app-xxx --json -f example.json -n 3`,
+	atc dify-gen -u http://localhost/v1 --api-key app-xxx --json -f example.json -n 3
+
+	# 使用默认配置文件(config.toml)中的URL和API Key
+	atc dify-gen --xml --raw "xxxx" -n 5
+
+	# 使用指定配置文件中的URL和API Key
+	atc dify-gen -c my-config.toml --xml --raw "xxxx" -n 5
+
+	# 使用自定义提示词文件生成测试用例
+	atc dify-gen --xml --raw "xxxx" --prompt prompt.txt -n 3
+
+	# 结合配置文件和提示词文件
+	atc dify-gen -c my-config.toml --json --raw '{"test":"data"}' --prompt custom_prompt.txt -n 5`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// 获取命令行参数
 		baseURL, _ := cmd.Flags().GetString("url")
 		apiKey, _ := cmd.Flags().GetString("api-key")
+		configFile, _ := cmd.Flags().GetString("config")
 		raw, _ := cmd.Flags().GetString("raw")
 		file, _ := cmd.Flags().GetString("file")
+		promptFile, _ := cmd.Flags().GetString("prompt")
 		num, _ := cmd.Flags().GetInt("num")
 		output, _ := cmd.Flags().GetString("output")
 		isXML, _ := cmd.Flags().GetBool("xml")
 		isJSON, _ := cmd.Flags().GetBool("json")
 		debug, _ := cmd.Flags().GetBool("debug")
 
+		// 如果未显式指定URL或API Key，尝试从配置文件读取
+		if baseURL == "" || apiKey == "" {
+			// 确定配置文件路径
+			if configFile == "" {
+				configFile = "config.toml" // 默认配置文件
+			}
+
+			// 尝试加载配置文件
+			config, err := utils.LoadConfig(configFile)
+			if err != nil {
+				// 如果配置文件加载失败且未显式指定URL和API Key，则报错
+				if baseURL == "" && apiKey == "" {
+					fmt.Printf("❌ 错误: 无法加载配置文件 %s: %v\n", configFile, err)
+					fmt.Println("请通过 -u 和 --api-key 参数显式指定，或创建配置文件")
+					return
+				}
+				// 如果只是部分参数缺失，给出提示但继续执行
+				if debug {
+					fmt.Printf("⚠️  警告: 配置文件加载失败: %v\n", err)
+				}
+			} else {
+				// 从配置文件补充缺失的参数
+				if baseURL == "" && config.Dify.URL != "" {
+					baseURL = config.Dify.URL
+					if debug {
+						fmt.Printf("📄 从配置文件读取URL: %s\n", baseURL)
+					}
+				}
+				if apiKey == "" && config.Dify.APIKey != "" {
+					apiKey = config.Dify.APIKey
+					if debug {
+						fmt.Println("📄 从配置文件读取API Key")
+					}
+				}
+			}
+		}
+
+		// 验证必需参数
+		if baseURL == "" {
+			fmt.Println("❌ 错误: 必须指定Dify API Base URL（通过 -u 参数或配置文件）")
+			return
+		}
+		if apiKey == "" {
+			fmt.Println("❌ 错误: 必须指定Dify API Key（通过 --api-key 参数或配置文件）")
+			return
+		}
+
 		// 验证生成数量限制
 		if num <= 0 {
 			fmt.Println("❌ 错误: 生成数量必须大于0")
 			return
 		}
-		if num > 8 {
-			fmt.Println("❌ 错误: dify-gen命令最多支持一次生成8条测试用例")
+		if num > 10 {
+			fmt.Println("❌ 错误: dify-gen命令最多支持一次生成10条测试用例")
 			return
 		}
 
@@ -114,11 +175,30 @@ var difyGenCmd = &cobra.Command{
 		fmt.Printf("🔢 生成数量: %d\n", num)
 		fmt.Printf("💾 输出文件: %s\n", output)
 
+		// 读取自定义提示词（如果指定）
+		var userPrompt string
+		if promptFile != "" {
+			prompt, err := utils.ReadPromptFile(promptFile)
+			if err != nil {
+				fmt.Printf("❌ 读取提示词文件失败: %v\n", err)
+				return
+			}
+			userPrompt = prompt
+			if debug {
+				fmt.Printf("📝 从文件读取自定义提示词: %s\n", promptFile)
+				fmt.Printf("📄 提示词内容预览: %s...\n", truncateString(userPrompt, 100))
+			}
+		}
+
 		// 准备请求参数
 		inputs := map[string]any{
 			"post_type": format, // 报文格式（json或xml）
 			"test_num":  num,    // 生成的用例个数
-			"text_only": "yes",  // 仅文本输出，默认值为yes
+		}
+
+		// 如果有自定义提示词，添加到inputs中
+		if userPrompt != "" {
+			inputs["user_prompt"] = userPrompt
 		}
 
 		// 调用Dify API生成测试用例
@@ -142,22 +222,30 @@ func getFormatName(isXML, isJSON bool) string {
 	return "未指定"
 }
 
+// truncateString 截断字符串到指定长度，用于调试输出
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen]
+}
+
 func init() {
 	rootCmd.AddCommand(difyGenCmd)
 
 	// 定义命令行参数
-	difyGenCmd.Flags().StringP("url", "u", "", "Dify API Base URL（必需）")
-	difyGenCmd.Flags().String("api-key", "", "Dify API Key（必需）")
+	difyGenCmd.Flags().StringP("url", "u", "", "Dify API Base URL（可选，可从配置文件读取）")
+	difyGenCmd.Flags().String("api-key", "", "Dify API Key（可选，可从配置文件读取）")
+	difyGenCmd.Flags().StringP("config", "c", "", "配置文件路径（默认为config.toml）")
 	difyGenCmd.Flags().StringP("raw", "r", "", "请求参数（正例报文）")
 	difyGenCmd.Flags().StringP("file", "f", "", "正例报文文件路径")
+	difyGenCmd.Flags().String("prompt", "", "自定义提示词文件路径（可选，文件必须是UTF-8编码）")
 	difyGenCmd.Flags().IntP("num", "n", 8, "生成用例数量（默认8，最大8）")
 	difyGenCmd.Flags().StringP("output", "o", "", "输出文件路径（可选，默认为当前目录下的test_cases.csv）")
 	difyGenCmd.Flags().BoolP("xml", "x", false, "使用XML格式")
 	difyGenCmd.Flags().BoolP("json", "j", false, "使用JSON格式")
 	difyGenCmd.Flags().BoolP("debug", "d", false, "启用调试模式")
 
-	// 标记必需的参数
-	difyGenCmd.MarkFlagRequired("url")
-	difyGenCmd.MarkFlagRequired("api-key")
-	// 注意：raw和file参数互斥，在Run函数中进行验证
+	// 注意：url和api-key参数不再是必需的，可以从配置文件读取
+	// raw和file参数互斥，在Run函数中进行验证
 }

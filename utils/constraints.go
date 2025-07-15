@@ -67,7 +67,7 @@ func (errs ValidationErrors) Error() string {
 	if len(errs) == 1 {
 		return errs[0].Error()
 	}
-	
+
 	var messages []string
 	for _, err := range errs {
 		messages = append(messages, err.Error())
@@ -241,23 +241,11 @@ func validateDatetimeConstraint(fieldName string, constraint FieldConstraint) []
 
 	// 验证时区格式
 	if constraint.Timezone != "" {
-		// 检查是否是有效的时区格式
-		if constraint.Timezone != "UTC" && !strings.HasPrefix(constraint.Timezone, "+") && !strings.HasPrefix(constraint.Timezone, "-") {
-			// 尝试加载时区
-			if _, err := time.LoadLocation(constraint.Timezone); err != nil {
-				errors = append(errors, ValidationError{
-					Field:   fieldName,
-					Message: fmt.Sprintf("无效的时区格式 '%s'，支持格式：UTC、+08:00、-05:00 或 IANA 时区名称（如：Asia/Shanghai）", constraint.Timezone),
-				})
-			}
-		} else if strings.HasPrefix(constraint.Timezone, "+") || strings.HasPrefix(constraint.Timezone, "-") {
-			// 验证偏移量格式（如：+08:00, -05:00）
-			if len(constraint.Timezone) != 6 || constraint.Timezone[3] != ':' {
-				errors = append(errors, ValidationError{
-					Field:   fieldName,
-					Message: fmt.Sprintf("无效的时区偏移量格式 '%s'，应为 ±HH:MM 格式（如：+08:00）", constraint.Timezone),
-				})
-			}
+		if err := ValidateTimezone(constraint.Timezone); err != nil {
+			errors = append(errors, ValidationError{
+				Field:   fieldName,
+				Message: fmt.Sprintf("无效的时区格式 '%s': %v。支持格式：UTC、±HH:MM（如：+08:00）或 IANA 时区名称（如：Asia/Shanghai）", constraint.Timezone, err),
+			})
 		}
 	}
 
@@ -477,7 +465,7 @@ func FindFieldConstraint(fieldName string) *FieldConstraint {
 		if constraint, exists := globalConstraintConfig.Constraints[simpleFieldName]; exists {
 			return &constraint
 		}
-		
+
 		// 尝试简单字段名的小写匹配
 		lowerSimpleFieldName := strings.ToLower(simpleFieldName)
 		if constraint, exists := globalConstraintConfig.Constraints[lowerSimpleFieldName]; exists {
@@ -543,6 +531,11 @@ func generateDateValue(constraint *FieldConstraint) string {
 		maxDate = time.Date(2030, 12, 31, 0, 0, 0, 0, time.UTC)
 	}
 
+	// 如果最大日期小于或等于最小日期，返回最小日期
+	if maxDate.Before(minDate) || maxDate.Equal(minDate) {
+		return minDate.Format(format)
+	}
+
 	// 生成随机日期
 	duration := maxDate.Sub(minDate)
 	randomDuration := time.Duration(rand.Int63n(int64(duration)))
@@ -574,6 +567,36 @@ func generateDatetimeValue(constraint *FieldConstraint) string {
 		} else if parsed, err := time.Parse(time.RFC3339, constraint.MaxDatetime); err == nil {
 			maxDatetime = parsed
 		}
+	}
+
+	// 如果最大日期时间小于或等于最小日期时间，返回最小日期时间
+	if maxDatetime.Before(minDatetime) || maxDatetime.Equal(minDatetime) {
+		// 处理时区
+		var targetTimezone *time.Location
+		if constraint.Timezone != "" {
+			if constraint.Timezone == "UTC" {
+				targetTimezone = time.UTC
+			} else if strings.HasPrefix(constraint.Timezone, "+") || strings.HasPrefix(constraint.Timezone, "-") {
+				// 解析偏移量格式（如：+08:00, -05:00）
+				if offset, err := parseTimezoneOffset(constraint.Timezone); err == nil {
+					targetTimezone = time.FixedZone("Custom", offset)
+				} else {
+					targetTimezone = time.UTC // 默认使用UTC
+				}
+			} else {
+				// IANA时区名称
+				if loc, err := time.LoadLocation(constraint.Timezone); err == nil {
+					targetTimezone = loc
+				} else {
+					targetTimezone = time.UTC // 默认使用UTC
+				}
+			}
+		} else {
+			// 默认使用UTC
+			targetTimezone = time.UTC
+		}
+		// 转换到目标时区并返回
+		return minDatetime.In(targetTimezone).Format("2006-01-02T15:04:05.000Z07:00")
 	}
 
 	// 生成随机日期时间（精确到毫秒）
@@ -611,6 +634,72 @@ func generateDatetimeValue(constraint *FieldConstraint) string {
 
 	// 返回RFC 3339 Extended格式
 	return randomDatetime.Format("2006-01-02T15:04:05.000Z07:00")
+}
+
+// ValidateTimezone 验证时区格式
+func ValidateTimezone(timezone string) error {
+	if timezone == "" {
+		return nil
+	}
+
+	// UTC 时区
+	if timezone == "UTC" {
+		return nil
+	}
+
+	// 偏移量格式（如：+08:00, -05:00）
+	if strings.HasPrefix(timezone, "+") || strings.HasPrefix(timezone, "-") {
+		return validateTimezoneOffset(timezone)
+	}
+
+	// IANA 时区名称（如：Asia/Shanghai）
+	if _, err := time.LoadLocation(timezone); err != nil {
+		return fmt.Errorf("无法加载 IANA 时区 '%s': %v", timezone, err)
+	}
+
+	return nil
+}
+
+// validateTimezoneOffset 验证时区偏移量格式
+func validateTimezoneOffset(offset string) error {
+	if len(offset) != 6 || offset[3] != ':' {
+		return fmt.Errorf("偏移量格式错误，应为 ±HH:MM 格式")
+	}
+
+	sign := offset[0]
+	if sign != '+' && sign != '-' {
+		return fmt.Errorf("偏移量符号错误，应为 + 或 -")
+	}
+
+	hours, err := strconv.Atoi(offset[1:3])
+	if err != nil {
+		return fmt.Errorf("小时部分格式错误: %v", err)
+	}
+
+	minutes, err := strconv.Atoi(offset[4:6])
+	if err != nil {
+		return fmt.Errorf("分钟部分格式错误: %v", err)
+	}
+
+	if hours < 0 || hours > 23 {
+		return fmt.Errorf("小时值超出范围 (0-23): %d", hours)
+	}
+
+	if minutes < 0 || minutes > 59 {
+		return fmt.Errorf("分钟值超出范围 (0-59): %d", minutes)
+	}
+
+	// 检查偏移量是否在合理范围内 (-12:00 到 +14:00)
+	totalMinutes := hours*60 + minutes
+	if sign == '-' {
+		totalMinutes = -totalMinutes
+	}
+
+	if totalMinutes < -12*60 || totalMinutes > 14*60 {
+		return fmt.Errorf("时区偏移量超出合理范围 (-12:00 到 +14:00): %s", offset)
+	}
+
+	return nil
 }
 
 // parseTimezoneOffset 解析时区偏移量（如：+08:00, -05:00）
@@ -738,10 +827,17 @@ func generateIntegerValue(constraint *FieldConstraint) int {
 		max = int(*constraint.Max)
 	}
 
-	if max <= min {
-		max = min + 1
+	// 如果最大值小于最小值，返回最小值
+	if max < min {
+		return min
 	}
 
+	// 如果最大值等于最小值，直接返回该值
+	if max == min {
+		return min
+	}
+
+	// 生成min到max之间的随机整数（包含边界）
 	return min + rand.Intn(max-min+1)
 }
 
@@ -761,13 +857,24 @@ func generateFloatValue(constraint *FieldConstraint) float64 {
 		precision = *constraint.Precision
 	}
 
-	if max <= min {
-		max = min + 1
+	// 如果最大值小于最小值，返回最小值
+	if max < min {
+		return applyFloatPrecision(min, precision)
+	}
+
+	// 如果最大值等于最小值，直接返回该值
+	if max == min {
+		return applyFloatPrecision(min, precision)
 	}
 
 	// 生成随机浮点数
 	value := min + rand.Float64()*(max-min)
 
+	return applyFloatPrecision(value, precision)
+}
+
+// applyFloatPrecision 应用浮点数精度
+func applyFloatPrecision(value float64, precision int) float64 {
 	// 应用精度
 	multiplier := 1.0
 	for i := 0; i < precision; i++ {
@@ -775,9 +882,7 @@ func generateFloatValue(constraint *FieldConstraint) float64 {
 	}
 
 	// 四舍五入到指定精度
-	roundedValue := float64(int(value*multiplier+0.5)) / multiplier
-
-	return roundedValue
+	return float64(int(value*multiplier+0.5)) / multiplier
 }
 
 // init 初始化随机数种子

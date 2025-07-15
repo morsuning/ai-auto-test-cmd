@@ -11,11 +11,17 @@ ATC (API Test Command) is a powerful API automation testing command-line tool de
 ## ✨ Core Features
 
 ### 🎯 Intelligent Test Case Generation
-- **Dify Chatflow API Generation**: Support calling Dify API to generate high-quality API test cases
 - **Local Generation**: Rapidly generate diverse test cases based on positive examples
 - **Smart Constraint System**: Supports 11 constraint types, generating realistic and valid Chinese test data
 - **Multi-format Support**: Supports JSON and XML input/output formats
 - **Data Variation Rules**: 50% fluctuation for numbers, 10% length change for strings
+
+### 🤖 AI-Powered Generation
+- **Dify API Integration**: Generate intelligent test cases through Dify Chatflow API
+- **Configuration File Support**: Read API settings from config.toml files
+- **Multiple Input Methods**: Support command-line input and file input
+- **Streaming Response**: Real-time generation progress display
+- **Smart Parsing**: Automatically parse API responses and generate test cases
 
 ### 🚀 Batch Interface Testing
 - **Multiple HTTP Methods**: Supports POST, GET, and other HTTP request methods
@@ -70,16 +76,26 @@ bash build/build.sh
 
 ## 🚀 Quick Start
 
-### 1. Generate Test Cases via Dify Chatflow API
-
-Use the `dify-gen` command to call Dify Chatflow API to generate test cases:
+### 1. AI-Powered Test Case Generation
 
 ```bash
-# Generate test cases using Dify API
-atc dify-gen "User registration API" --api-key your_api_key --base-url https://api.dify.ai/v1 --user user123
+# Use default configuration file to generate test cases
+atc dify-gen --xml --raw "<user><name>John</name></user>" -n 5
 
-# Generate with custom parameters
-atc dify-gen "User login API" --api-key your_api_key --base-url https://api.dify.ai/v1 --user user123 --inputs '{"format":"json","count":10}'
+# Specify configuration file to generate test cases
+atc dify-gen -c my-config.toml --json --raw '{"name":"test"}' -n 3
+
+# Read input from file and generate
+atc dify-gen --json -f input.json -n 5 --debug
+
+# Use custom prompt file to generate test cases
+atc dify-gen --xml --raw "<user><name>John</name></user>" --prompt custom_prompt.txt -n 3
+
+# Combine configuration file and prompt file
+atc dify-gen -c my-config.toml --json --raw '{"name":"test"}' --prompt prompt.txt -n 5
+
+# Explicitly specify API parameters (override config file)
+atc dify-gen -u https://api.dify.ai/v1 --api-key your_key --xml --raw "<test/>" -n 2
 ```
 
 ### 2. Generate Test Cases Locally
@@ -98,7 +114,7 @@ atc local-gen -f examples/json_example.json --json -n 20
 atc local-gen -f examples/json_example.json --json -n 10 --constraints
 ```
 
-### 2. Execute Interface Testing
+### 3. Execute Interface Testing
 
 ```bash
 # POST request sending JSON data
@@ -117,7 +133,7 @@ atc request -u https://api.example.com/users -m post -f testcases.csv --json --h
 atc request -u https://api.example.com/users -m post -f testcases.csv --json -s results.csv
 ```
 
-### 3. Validate Constraint Configuration
+### 4. Validate Constraint Configuration
 
 ```bash
 # Validate default configuration file
@@ -131,6 +147,56 @@ atc validate --verbose
 ```
 
 ## 📋 Command Reference
+
+### `dify-gen` - AI-Powered Test Case Generation
+
+Generate intelligent test cases through Dify Chatflow API.
+
+```bash
+atc dify-gen [flags]
+```
+
+**Main Parameters:**
+- `--url, -u`: Dify API URL (optional, can be read from config file)
+- `--api-key`: Dify API Key (optional, can be read from config file)
+- `--config, -c`: Configuration file path (default: config.toml)
+- `--json`: Specify JSON format
+- `--xml`: Specify XML format
+- `--raw`: Direct raw data input
+- `--file, -f`: Read input from file
+- `--prompt`: Custom prompt file path (optional, file must be UTF-8 encoded)
+- `--num, -n`: Generation count (default 1, max 10)
+- `--output, -o`: Output file path
+- `--debug, -d`: Enable debug mode
+
+**Configuration File Support:**
+
+Create a `config.toml` file:
+```toml
+[dify]
+url = "https://api.dify.ai/v1/chatflows/xxx/run"
+api_key = "app-xxxxxxxxxx"
+```
+
+**Parameter Priority:**
+1. Command-line parameters (highest priority)
+2. Configuration file parameters
+3. Error if neither is specified
+
+**Examples:**
+```bash
+# Use default configuration file
+atc dify-gen --json --raw '{"name":"test"}' -n 3
+
+# Specify configuration file
+atc dify-gen -c my-config.toml --xml --raw "<test/>" -n 5
+
+# Override config file parameters
+atc dify-gen --api-key new_key --json -f input.json -n 2
+
+# Read from file and enable debug
+atc dify-gen -f input.xml --xml -n 3 --debug
+```
 
 ### `local-gen` - Local Test Case Generation
 
@@ -171,6 +237,8 @@ atc request -u [URL] -m [METHOD] -f [CSV_FILE] [flags]
 
 **Main Parameters:**
 - `--url, -u`: Target interface URL (required)
+  - **Note**: If URL doesn't include protocol (http:// or https://), http:// will be added automatically
+  - Example: `localhost:8080/user` becomes `http://localhost:8080/user`
 - `--method, -m`: HTTP method (post/get)
 - `--file, -f`: CSV test case file (required)
 - `--json`: JSON format request body
@@ -188,6 +256,9 @@ atc request -u [URL] -m [METHOD] -f [CSV_FILE] [flags]
 ```bash
 # Basic POST request
 atc request -u https://api.example.com/users -m post -f users.csv --json
+
+# Local server (automatically adds http:// protocol)
+atc request -u localhost:8080/api/test -m post -f users.csv --json
 
 # Use authentication and custom headers
 atc request -u https://api.example.com/users -m post -f users.csv --json \

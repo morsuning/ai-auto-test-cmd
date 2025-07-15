@@ -16,6 +16,13 @@ ATC (API Test Command) 是一个功能强大的API自动化测试命令行工具
 - **多格式支持**：支持JSON和XML格式的输入输出
 - **数据变化规则**：数值50%波动，字符串10%长度变化
 
+### 🤖 AI智能生成
+- **Dify API集成**：通过Dify Chatflow API生成智能测试用例
+- **配置文件支持**：支持从config.toml文件读取API配置
+- **多种输入方式**：支持命令行输入和文件输入
+- **流式响应处理**：实时显示生成进度
+- **智能解析**：自动解析API响应并生成测试用例
+
 ### 🚀 批量接口测试
 - **多HTTP方法**：支持POST、GET等HTTP请求方法
 - **多种鉴权**：Bearer Token、Basic Auth、API Key等
@@ -104,7 +111,29 @@ atc request -u https://api.example.com/users -m post -f testcases.csv --json --h
 atc request -u https://api.example.com/users -m post -f testcases.csv --json -s results.csv
 ```
 
-### 3. 验证约束配置
+### 3. AI智能生成测试用例
+
+```bash
+# 使用默认配置文件生成测试用例
+atc dify-gen --xml --raw "<user><name>张三</name></user>" -n 5
+
+# 指定配置文件生成测试用例
+atc dify-gen -c my-config.toml --json --raw '{"name":"test"}' -n 3
+
+# 从文件读取输入并生成
+atc dify-gen --json -f input.json -n 5 --debug
+
+# 使用自定义提示词文件生成测试用例
+atc dify-gen --xml --raw "<user><name>张三</name></user>" --prompt custom_prompt.txt -n 3
+
+# 结合配置文件和提示词文件
+atc dify-gen -c my-config.toml --json --raw '{"name":"test"}' --prompt prompt.txt -n 5
+
+# 显式指定API参数（覆盖配置文件）
+atc dify-gen -u https://api.dify.ai/v1 --api-key your_key --xml --raw "<test/>" -n 2
+```
+
+### 4. 验证约束配置
 
 ```bash
 # 验证默认配置文件
@@ -118,6 +147,56 @@ atc validate --verbose
 ```
 
 ## 📋 命令详解
+
+### `dify-gen` - AI智能生成测试用例
+
+通过Dify Chatflow API生成智能测试用例。
+
+```bash
+atc dify-gen [flags]
+```
+
+**主要参数：**
+- `--url, -u`: Dify API URL（可选，可从配置文件读取）
+- `--api-key`: Dify API Key（可选，可从配置文件读取）
+- `--config, -c`: 配置文件路径（默认：config.toml）
+- `--json`: 指定JSON格式
+- `--xml`: 指定XML格式
+- `--raw`: 直接输入原始数据
+- `--file, -f`: 从文件读取输入
+- `--prompt`: 自定义提示词文件路径（可选，文件必须是UTF-8编码）
+- `--num, -n`: 生成数量（默认1，最大10）
+- `--output, -o`: 输出文件路径
+- `--debug, -d`: 启用调试模式
+
+**配置文件支持：**
+
+创建 `config.toml` 文件：
+```toml
+[dify]
+url = "https://api.dify.ai/v1/chatflows/xxx/run"
+api_key = "app-xxxxxxxxxx"
+```
+
+**参数优先级：**
+1. 命令行参数（最高优先级）
+2. 配置文件参数
+3. 如果都未指定则报错
+
+**示例：**
+```bash
+# 使用默认配置文件
+atc dify-gen --json --raw '{"name":"test"}' -n 3
+
+# 指定配置文件
+atc dify-gen -c my-config.toml --xml --raw "<test/>" -n 5
+
+# 覆盖配置文件中的参数
+atc dify-gen --api-key new_key --json -f input.json -n 2
+
+# 从文件读取并启用调试
+atc dify-gen -f input.xml --xml -n 3 --debug
+```
 
 ### `local-gen` - 本地生成测试用例
 
@@ -158,6 +237,8 @@ atc request -u [URL] -m [METHOD] -f [CSV文件] [flags]
 
 **主要参数：**
 - `--url, -u`: 目标接口URL（必需）
+  - **注意**：如果URL未包含协议（http://或https://），系统将自动添加http://前缀
+  - 示例：`localhost:8080/user` 将被处理为 `http://localhost:8080/user`
 - `--method, -m`: HTTP方法（post/get）
 - `--file, -f`: CSV测试用例文件（必需）
 - `--json`: JSON格式请求体
@@ -175,6 +256,9 @@ atc request -u [URL] -m [METHOD] -f [CSV文件] [flags]
 ```bash
 # 基本POST请求
 atc request -u https://api.example.com/users -m post -f users.csv --json
+
+# 本地服务器（自动添加http://协议）
+atc request -u localhost:8080/api/test -m post -f users.csv --json
 
 # 使用鉴权和自定义头
 atc request -u https://api.example.com/users -m post -f users.csv --json \

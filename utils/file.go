@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 )
 
 // SaveToCSV 将数据保存为CSV文件
@@ -166,4 +167,33 @@ func ReadAndValidateFileContent(filePath string, format string) (string, error) 
 	}
 
 	return content, nil
+}
+
+// ReadPromptFile 读取提示词文件并验证UTF-8编码
+func ReadPromptFile(filePath string) (string, error) {
+	// 检查文件是否存在
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		return "", fmt.Errorf("提示词文件不存在: %s", filePath)
+	}
+
+	// 读取文件内容
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", fmt.Errorf("读取提示词文件失败: %v", err)
+	}
+
+	// 检查是否为有效的UTF-8编码
+	if !utf8.Valid(content) {
+		return "", fmt.Errorf("提示词文件 %s 不是有效的UTF-8编码", filePath)
+	}
+
+	// 转换为字符串并去除首尾空白字符
+	promptContent := strings.TrimSpace(string(content))
+
+	// 检查内容是否为空
+	if promptContent == "" {
+		return "", fmt.Errorf("提示词文件 %s 内容为空", filePath)
+	}
+
+	return promptContent, nil
 }
