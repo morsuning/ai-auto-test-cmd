@@ -18,7 +18,7 @@ var difyGenCmd = &cobra.Command{
   # 根据正例xml报文生成5条测试用例
 	atc dify-gen -u http://localhost/v1 --api-key app-xxx --xml --raw "xxxx" -n 5
 
-	# 根据正例json报文生成10条测试用例（最大限制）
+	# 根据正例json报文生成10条测试用例
 	atc dify-gen -u http://localhost/v1 --api-key app-xxx --json --raw "xxxx" -n 10
 
 	# 从XML文件读取正例报文生成测试用例
@@ -102,10 +102,6 @@ var difyGenCmd = &cobra.Command{
 		// 验证生成数量限制
 		if num <= 0 {
 			fmt.Println("❌ 错误: 生成数量必须大于0")
-			return
-		}
-		if num > 10 {
-			fmt.Println("❌ 错误: dify-gen命令最多支持一次生成10条测试用例")
 			return
 		}
 
@@ -239,8 +235,8 @@ func init() {
 	difyGenCmd.Flags().StringP("config", "c", "", "配置文件路径（默认为config.toml）")
 	difyGenCmd.Flags().StringP("raw", "r", "", "请求参数（正例报文）")
 	difyGenCmd.Flags().StringP("file", "f", "", "正例报文文件路径")
-	difyGenCmd.Flags().String("prompt", "", "自定义提示词文件路径（可选，文件必须是UTF-8编码）")
-	difyGenCmd.Flags().IntP("num", "n", 8, "生成用例数量（默认8，最大8）")
+	difyGenCmd.Flags().StringP("prompt", "p", "", "自定义提示词文件路径（可选，文件必须是UTF-8编码）")
+	difyGenCmd.Flags().IntP("num", "n", 5, "生成用例数量（默认5）")
 	difyGenCmd.Flags().StringP("output", "o", "", "输出文件路径（可选，默认为当前目录下的test_cases.csv）")
 	difyGenCmd.Flags().BoolP("xml", "x", false, "使用XML格式")
 	difyGenCmd.Flags().BoolP("json", "j", false, "使用JSON格式")

@@ -80,16 +80,16 @@ bash build/build.sh
 
 ```bash
 # 从JSON正例生成测试用例
-atc local-gen '{"name":"张三","age":25,"email":"test@example.com"}' --json --count 10
+atc local-gen '{"name":"张三","age":25,"email":"test@example.com"}' --json --num 10
 
 # 从XML正例生成测试用例
-atc local-gen '<user><name>张三</name><age>25</age></user>' --xml --count 5
+atc local-gen '<user><name>张三</name><age>25</age></user>' --xml --num 5
 
 # 从文件读取正例并生成
-atc local-gen -f examples/json_example.json --json --count 20
+atc local-gen -f examples/json_example.json --json --num 20
 
 # 使用智能约束系统生成
-atc local-gen -f examples/json_example.json --json --count 10 --constraints
+atc local-gen -f examples/json_example.json --json --num 10 --constraints
 ```
 
 ### 2. 执行接口测试
@@ -165,7 +165,7 @@ atc dify-gen [flags]
 - `--raw`: 直接输入原始数据
 - `--file, -f`: 从文件读取输入
 - `--prompt`: 自定义提示词文件路径（可选，文件必须是UTF-8编码）
-- `--num, -n`: 生成数量（默认1，最大10）
+- `--num, -n`: 生成数量（默认5）
 - `--output, -o`: 输出文件路径
 - `--debug, -d`: 启用调试模式
 

@@ -165,7 +165,7 @@ atc dify-gen [flags]
 - `--raw`: Direct raw data input
 - `--file, -f`: Read input from file
 - `--prompt`: Custom prompt file path (optional, file must be UTF-8 encoded)
-- `--num, -n`: Generation count (default 1, max 10)
+- `--num, -n`: Generation count (default 5)
 - `--output, -o`: Output file path
 - `--debug, -d`: Enable debug mode
 
