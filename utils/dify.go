@@ -429,7 +429,7 @@ func generateRandomString(length int) string {
 //  2. 连续JSON对象格式：{...} {...} {...}
 //
 // XML格式：
-//  1. 连续XML对象格式：<root>...</root> <root>...</root> <root>...</root>
+//  1. 连续XML对象格式，XML对象间通过4个$$$$符号分隔：<root>...</root> <root>...</root> <root>...</root>
 //
 // 通用格式：
 //  1. 传统的逐行格式（向后兼容）
@@ -839,7 +839,8 @@ func splitXMLObjectsByDelimiter(text string) []string {
 
 	// 使用$$$$作为分隔符分割文本
 	delimiter := "$$$$"
-	parts := strings.Split(text, delimiter)
+	// 使用SplitAfter更高效地分割文本
+	parts := strings.SplitAfter(text, delimiter)
 
 	// 处理每个分割后的部分
 	for _, part := range parts {

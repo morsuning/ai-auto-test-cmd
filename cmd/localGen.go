@@ -2,8 +2,10 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 
+	"github.com/morsuning/ai-auto-test-cmd/models"
 	"github.com/morsuning/ai-auto-test-cmd/utils"
 	"github.com/spf13/cobra"
 )
@@ -42,6 +44,22 @@ var localGenCmd = &cobra.Command{
 		output, _ := cmd.Flags().GetString("output")
 		useConstraints, _ := cmd.Flags().GetBool("constraints")
 		constraintsFile, _ := cmd.Flags().GetString("constraints-file")
+		exec, _ := cmd.Flags().GetBool("exec")
+
+		// 如果使用exec参数，验证request相关参数
+		var requestParams RequestParams
+		if exec {
+			var err error
+			requestParams, err = getRequestParams(cmd)
+			if err != nil {
+				fmt.Printf("❌ 获取执行参数失败: %v\n", err)
+				return
+			}
+			if err := validateRequestParams(requestParams); err != nil {
+				fmt.Printf("❌ 执行参数验证失败: %v\n", err)
+				return
+			}
+		}
 
 		// 检查输入方式：必须指定raw或file其中之一
 		if raw == "" && file == "" {
@@ -171,6 +189,42 @@ var localGenCmd = &cobra.Command{
 			return
 		}
 		fmt.Printf("成功生成 %d 条测试用例并保存到 %s\n", num, output)
+
+		// 如果使用exec参数，执行生成的测试用例
+		if exec {
+			// 将生成的测试用例转换为models.TestCase格式
+			modelTestCases := make([]models.TestCase, len(testCases))
+			for i, testCase := range testCases {
+				var testData map[string]any
+				if isXML {
+					// XML格式：将测试用例数据序列化为JSON字符串，然后存储为XML内容
+					jsonBytes, _ := json.Marshal(testCase)
+					testData = map[string]any{
+						"_xml_content": string(jsonBytes), // 临时使用JSON字符串作为XML内容
+					}
+				} else {
+					// JSON格式：使用特殊键存储JSON内容
+					jsonBytes, _ := json.Marshal(testCase)
+					testData = map[string]any{
+						"_json_content": string(jsonBytes),
+					}
+				}
+
+				modelTestCases[i] = models.TestCase{
+					ID:          fmt.Sprintf("test_%d", i+1),
+					Name:        fmt.Sprintf("测试用例_%d", i+1),
+					Description: fmt.Sprintf("本地生成的第%d个测试用例", i+1),
+					Type:        "auto",
+					Data:        testData,
+				}
+			}
+
+			// 直接执行测试用例
+			if err := executeTestCasesDirectly(modelTestCases, requestParams); err != nil {
+				fmt.Printf("❌ 执行测试用例失败: %v\n", err)
+				return
+			}
+		}
 	},
 }
 
@@ -186,6 +240,12 @@ func init() {
 	localGenCmd.Flags().StringP("output", "o", "", "输出文件路径（默认为当前目录下的test_cases.csv）")
 	localGenCmd.Flags().BoolP("constraints", "c", false, "启用智能约束模式（使用默认配置）")
 	localGenCmd.Flags().StringP("constraints-file", "C", "", "指定约束配置文件路径")
+
+	// 添加exec参数
+	localGenCmd.Flags().BoolP("exec", "e", false, "生成测试用例后立即执行")
+
+	// 添加request相关参数
+	addRequestFlags(localGenCmd)
 
 	// 注意：raw和file参数互斥，在Run函数中进行验证
 }

@@ -4,7 +4,7 @@
 # 支持的平台：Windows x86, macOS ARM, Linux ARM, Linux x86
 
 # 设置版本号
-VERSION="1.2.1"
+VERSION="1.2.2"
 
 # 设置输出目录
 OUTPUT_DIR="./bin"

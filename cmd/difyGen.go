@@ -51,6 +51,22 @@ var difyGenCmd = &cobra.Command{
 		isXML, _ := cmd.Flags().GetBool("xml")
 		isJSON, _ := cmd.Flags().GetBool("json")
 		debug, _ := cmd.Flags().GetBool("debug")
+		exec, _ := cmd.Flags().GetBool("exec")
+
+		// 如果使用exec参数，验证request相关参数
+		var requestParams RequestParams
+		if exec {
+			var err error
+			requestParams, err = getRequestParams(cmd)
+			if err != nil {
+				fmt.Printf("❌ 获取执行参数失败: %v\n", err)
+				return
+			}
+			if err := validateRequestParams(requestParams); err != nil {
+				fmt.Printf("❌ 执行参数验证失败: %v\n", err)
+				return
+			}
+		}
 
 		// 如果未显式指定URL或API Key，尝试从配置文件读取
 		if baseURL == "" || apiKey == "" {
@@ -205,6 +221,14 @@ var difyGenCmd = &cobra.Command{
 		}
 
 		fmt.Printf("✅ Dify调用已完成")
+
+		// 如果使用exec参数，执行生成的测试用例
+		if exec {
+			if err := executeGeneratedTestCases(output, requestParams); err != nil {
+				fmt.Printf("❌ 执行测试用例失败: %v\n", err)
+				return
+			}
+		}
 	},
 }
 
@@ -241,6 +265,12 @@ func init() {
 	difyGenCmd.Flags().BoolP("xml", "x", false, "使用XML格式")
 	difyGenCmd.Flags().BoolP("json", "j", false, "使用JSON格式")
 	difyGenCmd.Flags().BoolP("debug", "d", false, "启用调试模式")
+
+	// 添加exec参数
+	difyGenCmd.Flags().BoolP("exec", "e", false, "生成测试用例后立即执行")
+
+	// 添加request相关参数
+	addRequestFlags(difyGenCmd)
 
 	// 注意：url和api-key参数不再是必需的，可以从配置文件读取
 	// raw和file参数互斥，在Run函数中进行验证

@@ -146,11 +146,11 @@ func init() {
 	requestCmd.Flags().BoolP("save", "s", false, "是否保存结果")
 	requestCmd.Flags().String("save-path", "", "结果保存路径（默认为当前目录下的result.csv）")
 	requestCmd.Flags().IntP("timeout", "t", 30, "请求超时时间（秒，默认30）")
-	requestCmd.Flags().IntP("concurrent", "c", 1, "并发请求数（默认1）")
+	requestCmd.Flags().IntP("concurrent", "c", 3, "并发请求数（默认3）")
 
 	// 请求体格式参数（互斥）
-	requestCmd.Flags().Bool("xml", false, "使用XML格式发送请求体")
-	requestCmd.Flags().Bool("json", false, "使用JSON格式发送请求体")
+	requestCmd.Flags().BoolP("xml", "x", false, "使用XML格式发送请求体")
+	requestCmd.Flags().BoolP("json", "j", false, "使用JSON格式发送请求体")
 
 	// 调试参数
 	requestCmd.Flags().Bool("debug", false, "启用调试模式，输出详细的请求信息")

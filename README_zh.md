@@ -30,6 +30,12 @@ ATC (API Test Command) 是一个功能强大的API自动化测试命令行工具
 - **并发执行**：提高测试执行效率
 - **结果保存**：支持CSV格式结果导出
 
+### ⚡ 一键生成并执行
+- **无缝集成**：`dify-gen`和`local-gen`命令支持`--exec(-e)`参数
+- **自动执行**：生成测试用例后立即执行HTTP请求测试
+- **参数复用**：支持`request`命令的所有参数和功能
+- **流程简化**：一条命令完成从生成到执行的完整测试流程
+
 ### 🛡️ 配置验证
 - **格式验证**：约束配置文件完整性检查
 - **内容验证**：数据类型和范围合理性验证
@@ -133,7 +139,25 @@ atc dify-gen -c my-config.toml --json --raw '{"name":"test"}' --prompt prompt.tx
 atc dify-gen -u https://api.dify.ai/v1 --api-key your_key --xml --raw "<test/>" -n 2
 ```
 
-### 4. 验证约束配置
+### 4. 一键生成并执行测试
+
+```bash
+# 本地生成并立即执行
+atc local-gen '{"name":"test","age":25}' --json -n 3 -e \
+  --request-url "https://httpbin.org/post" --request-json
+
+# AI生成并立即执行，带鉴权
+atc dify-gen --json --raw '{"user":"admin"}' -n 5 -e \
+  --request-url "https://api.example.com/users" --request-json \
+  --request-auth-bearer "your_token"
+
+# 使用约束系统生成并执行，保存结果
+atc local-gen '{"name":"张三","phone":"13800138000"}' --json --constraints -n 5 -e \
+  --request-url "https://api.example.com/users" --request-json \
+  --request-save --request-save-path "results.csv"
+```
+
+### 5. 验证约束配置
 
 ```bash
 # 验证默认配置文件
@@ -168,6 +192,22 @@ atc dify-gen [flags]
 - `--num, -n`: 生成数量（默认5）
 - `--output, -o`: 输出文件路径
 - `--debug, -d`: 启用调试模式
+- `--exec, -e`: 生成测试用例后立即执行（需配合request相关参数使用）
+
+**执行相关参数（与--exec配合使用）：**
+- `--request-url`: 执行测试时的目标URL（使用-e参数时必需）
+- `--request-method`: 执行测试时的请求方法（get/post，默认post）
+- `--request-json`: 执行测试时使用JSON格式发送请求体
+- `--request-xml`: 执行测试时使用XML格式发送请求体
+- `--request-timeout`: 执行测试时的请求超时时间（秒，默认30）
+- `--request-concurrent`: 执行测试时的并发请求数（默认1）
+- `--request-debug`: 执行测试时启用调试模式
+- `--request-save`: 执行测试时是否保存结果
+- `--request-save-path`: 执行测试时的结果保存路径
+- `--request-auth-bearer`: 执行测试时的Bearer Token认证
+- `--request-auth-basic`: 执行测试时的Basic Auth认证
+- `--request-auth-api-key`: 执行测试时的API Key认证
+- `--request-header`: 执行测试时的自定义HTTP头（可多次使用）
 
 **配置文件支持：**
 
@@ -196,6 +236,15 @@ atc dify-gen --api-key new_key --json -f input.json -n 2
 
 # 从文件读取并启用调试
 atc dify-gen -f input.xml --xml -n 3 --debug
+
+# 生成测试用例并立即执行
+atc dify-gen --json --raw '{"name":"test","age":25}' -n 3 -e \
+  --request-url "https://httpbin.org/post" --request-json
+
+# 生成并执行，带鉴权和调试
+atc dify-gen --json --raw '{"user":"admin"}' -n 5 -e \
+  --request-url "https://api.example.com/users" --request-json \
+  --request-auth-bearer "your_token" --request-debug
 ```
 
 ### `local-gen` - 本地生成测试用例
@@ -214,6 +263,22 @@ atc local-gen [正例输入] [flags]
 - `--output, -o`: 输出文件路径
 - `--constraints`: 启用智能约束系统
 - `--constraints-file`: 指定约束配置文件
+- `--exec, -e`: 生成测试用例后立即执行（需配合request相关参数使用）
+
+**执行相关参数（与--exec配合使用）：**
+- `--request-url`: 执行测试时的目标URL（使用-e参数时必需）
+- `--request-method`: 执行测试时的请求方法（get/post，默认post）
+- `--request-json`: 执行测试时使用JSON格式发送请求体
+- `--request-xml`: 执行测试时使用XML格式发送请求体
+- `--request-timeout`: 执行测试时的请求超时时间（秒，默认30）
+- `--request-concurrent`: 执行测试时的并发请求数（默认1）
+- `--request-debug`: 执行测试时启用调试模式
+- `--request-save`: 执行测试时是否保存结果
+- `--request-save-path`: 执行测试时的结果保存路径
+- `--request-auth-bearer`: 执行测试时的Bearer Token认证
+- `--request-auth-basic`: 执行测试时的Basic Auth认证
+- `--request-auth-api-key`: 执行测试时的API Key认证
+- `--request-header`: 执行测试时的自定义HTTP头（可多次使用）
 
 **示例：**
 ```bash
@@ -225,6 +290,15 @@ atc local-gen '{"name":"张三","phone":"13800138000"}' --json --constraints -n 
 
 # 从文件生成并保存到指定位置
 atc local-gen -f input.json --json -n 20 -o testcases.csv
+
+# 生成测试用例并立即执行
+atc local-gen '{"name":"test","age":25}' --json -n 3 -e \
+  --request-url "https://httpbin.org/post" --request-json
+
+# 生成并执行，使用约束系统和鉴权
+atc local-gen '{"user":"admin","phone":"13800138000"}' --json --constraints -n 5 -e \
+  --request-url "https://api.example.com/users" --request-json \
+  --request-auth-bearer "your_token" --request-debug
 ```
 
 ### `request` - 批量接口测试
