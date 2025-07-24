@@ -73,9 +73,4 @@ echo macOS ARM: %OUTPUT_DIR%\atc_darwin_arm64
 echo Linux ARM: %OUTPUT_DIR%\atc_linux_arm64
 echo Linux amd64: %OUTPUT_DIR%\atc_linux_amd64
 
-REM 提示用户如何压缩文件
-echo.
-echo 注意：Windows 批处理脚本不包含自动压缩功能
-echo 您可以手动压缩这些文件或使用 build.sh 脚本在支持 zip 命令的环境中构建
-
 pause

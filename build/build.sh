@@ -55,27 +55,3 @@ else
     echo "❌ Linux amd64 版本构建失败"
 fi
 echo ""
-
-# 创建压缩包
-echo "正在创建压缩包..."
-cd "$OUTPUT_DIR"
-
-# Windows 压缩包
-zip "atc_windows_amd64_v$VERSION.zip" "atc_windows_amd64.exe"
-
-# macOS 压缩包
-zip "atc_darwin_arm64_v$VERSION.zip" "atc_darwin_arm64"
-
-# Linux ARM 压缩包
-zip "atc_linux_arm64_v$VERSION.zip" "atc_linux_arm64"
-
-# Linux amd64 压缩包
-zip "atc_linux_amd64_v$VERSION.zip" "atc_linux_amd64"
-
-cd ..
-
-echo "构建完成！所有版本已保存到 $OUTPUT_DIR 目录"
-echo "Windows amd64: $OUTPUT_DIR/atc_windows_amd64_v$VERSION.zip"
-echo "macOS ARM: $OUTPUT_DIR/atc_darwin_arm64_v$VERSION.zip"
-echo "Linux ARM: $OUTPUT_DIR/atc_linux_arm64_v$VERSION.zip"
-echo "Linux amd64: $OUTPUT_DIR/atc_linux_amd64_v$VERSION.zip"
