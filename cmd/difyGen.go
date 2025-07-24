@@ -253,25 +253,38 @@ func truncateString(s string, maxLen int) string {
 func init() {
 	rootCmd.AddCommand(difyGenCmd)
 
-	// 定义命令行参数
+	// 必填参数组 - 报文格式（必须选择其一）
+	difyGenCmd.Flags().BoolP("xml", "x", false, "使用XML格式")
+	difyGenCmd.Flags().BoolP("json", "j", false, "使用JSON格式")
+
+	// 必填参数组 - 输入方式（必须选择其一）
+	difyGenCmd.Flags().StringP("raw", "r", "", "请求参数（正例报文）")
+	difyGenCmd.Flags().StringP("file", "f", "", "正例报文文件路径")
+
+	// API连接参数组
 	difyGenCmd.Flags().StringP("url", "u", "", "Dify API Base URL（可选，可从配置文件读取）")
 	difyGenCmd.Flags().String("api-key", "", "Dify API Key（可选，可从配置文件读取）")
 	difyGenCmd.Flags().StringP("config", "c", "", "配置文件路径（默认为config.toml）")
-	difyGenCmd.Flags().StringP("raw", "r", "", "请求参数（正例报文）")
-	difyGenCmd.Flags().StringP("file", "f", "", "正例报文文件路径")
-	difyGenCmd.Flags().StringP("prompt", "p", "", "自定义提示词文件路径（可选，文件必须是UTF-8编码）")
-	difyGenCmd.Flags().IntP("num", "n", 5, "生成用例数量（默认5）")
-	difyGenCmd.Flags().StringP("output", "o", "", "输出文件路径（可选，默认为当前目录下的test_cases.csv）")
-	difyGenCmd.Flags().BoolP("xml", "x", false, "使用XML格式")
-	difyGenCmd.Flags().BoolP("json", "j", false, "使用JSON格式")
-	difyGenCmd.Flags().BoolP("debug", "d", false, "启用调试模式")
 
-	// 添加exec参数
+	// 生成控制参数组
+	difyGenCmd.Flags().IntP("num", "n", 5, "生成用例数量（默认5）")
+	difyGenCmd.Flags().StringP("prompt", "p", "", "自定义提示词文件路径（可选，文件必须是UTF-8编码）")
+
+	// 输出控制参数组
+	difyGenCmd.Flags().StringP("output", "o", "", "输出文件路径（可选，默认为当前目录下的test_cases.csv）")
+
+	// 执行控制参数组
 	difyGenCmd.Flags().BoolP("exec", "e", false, "生成测试用例后立即执行")
 
-	// 添加request相关参数
+	// 调试参数组
+	difyGenCmd.Flags().BoolP("debug", "d", false, "启用调试模式")
+
+	// 添加request相关参数（当使用exec时需要）
 	addRequestFlags(difyGenCmd)
 
+	// 自定义参数显示顺序
+	difyGenCmd.Flags().SortFlags = false
+	
 	// 注意：url和api-key参数不再是必需的，可以从配置文件读取
 	// raw和file参数互斥，在Run函数中进行验证
 }

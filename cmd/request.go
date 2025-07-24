@@ -139,29 +139,36 @@ var requestCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(requestCmd)
 
-	// 定义命令行参数
+	// 必填参数组
 	requestCmd.Flags().StringP("url", "u", "", "目标URL（必需）")
-	requestCmd.Flags().StringP("method", "m", "get", "请求方法（get/post，默认get）")
 	requestCmd.Flags().StringP("file", "f", "", "测试用例文件路径（必需）")
-	requestCmd.Flags().BoolP("save", "s", false, "是否保存结果")
-	requestCmd.Flags().String("save-path", "", "结果保存路径（默认为当前目录下的result.csv）")
-	requestCmd.Flags().IntP("timeout", "t", 30, "请求超时时间（秒，默认30）")
-	requestCmd.Flags().IntP("concurrent", "c", 3, "并发请求数（默认3）")
 
-	// 请求体格式参数（互斥）
+	// 必填参数组 - 请求体格式（必须选择其一）
 	requestCmd.Flags().BoolP("xml", "x", false, "使用XML格式发送请求体")
 	requestCmd.Flags().BoolP("json", "j", false, "使用JSON格式发送请求体")
 
-	// 调试参数
-	requestCmd.Flags().Bool("debug", false, "启用调试模式，输出详细的请求信息")
+	// 请求控制参数组
+	requestCmd.Flags().StringP("method", "m", "get", "请求方法（get/post，默认get）")
+	requestCmd.Flags().IntP("timeout", "t", 30, "请求超时时间（秒，默认30）")
+	requestCmd.Flags().IntP("concurrent", "c", 3, "并发请求数（默认3）")
 
-	// 鉴权参数
+	// 结果保存参数组
+	requestCmd.Flags().BoolP("save", "s", false, "是否保存结果")
+	requestCmd.Flags().String("save-path", "", "结果保存路径（默认为当前目录下的result.csv）")
+
+	// 鉴权参数组
 	requestCmd.Flags().String("auth-bearer", "", "Bearer Token认证，格式：--auth-bearer \"your_token_here\"")
 	requestCmd.Flags().String("auth-basic", "", "Basic Auth认证，格式：--auth-basic \"username:password\"")
 	requestCmd.Flags().String("auth-api-key", "", "API Key认证（通过X-API-Key头），格式：--auth-api-key \"your_api_key\"")
 
-	// 自定义HTTP头参数
+	// 自定义HTTP头参数组
 	requestCmd.Flags().StringSlice("header", []string{}, "自定义HTTP头，格式：--header \"Key: Value\"，可多次使用")
+
+	// 调试参数组
+	requestCmd.Flags().Bool("debug", false, "启用调试模式，输出详细的请求信息")
+
+	// 自定义参数显示顺序
+	requestCmd.Flags().SortFlags = false
 
 	// 标记必需的参数
 	requestCmd.MarkFlagRequired("url")

@@ -231,21 +231,32 @@ var localGenCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(localGenCmd)
 
-	// 定义命令行参数
-	localGenCmd.Flags().StringP("raw", "r", "", "请求参数（正例报文）")
-	localGenCmd.Flags().StringP("file", "f", "", "正例报文文件路径")
-	localGenCmd.Flags().IntP("num", "n", 10, "生成用例数量（默认10）")
+	// 必填参数组 - 报文格式（必须选择其一）
 	localGenCmd.Flags().BoolP("xml", "x", false, "使用XML格式")
 	localGenCmd.Flags().BoolP("json", "j", false, "使用JSON格式")
-	localGenCmd.Flags().StringP("output", "o", "", "输出文件路径（默认为当前目录下的test_cases.csv）")
+
+	// 必填参数组 - 输入方式（必须选择其一）
+	localGenCmd.Flags().StringP("raw", "r", "", "请求参数（正例报文）")
+	localGenCmd.Flags().StringP("file", "f", "", "正例报文文件路径")
+
+	// 生成控制参数组
+	localGenCmd.Flags().IntP("num", "n", 10, "生成用例数量（默认10）")
+
+	// 约束控制参数组
 	localGenCmd.Flags().BoolP("constraints", "c", false, "启用智能约束模式（使用默认配置）")
 	localGenCmd.Flags().StringP("constraints-file", "C", "", "指定约束配置文件路径")
 
-	// 添加exec参数
+	// 输出控制参数组
+	localGenCmd.Flags().StringP("output", "o", "", "输出文件路径（默认为当前目录下的test_cases.csv）")
+
+	// 执行控制参数组
 	localGenCmd.Flags().BoolP("exec", "e", false, "生成测试用例后立即执行")
 
-	// 添加request相关参数
+	// 添加request相关参数（当使用exec时需要）
 	addRequestFlags(localGenCmd)
+
+	// 自定义参数显示顺序
+	localGenCmd.Flags().SortFlags = false
 
 	// 注意：raw和file参数互斥，在Run函数中进行验证
 }

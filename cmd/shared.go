@@ -30,28 +30,32 @@ type RequestParams struct {
 
 // addRequestFlags 为命令添加request相关的参数
 func addRequestFlags(cmd *cobra.Command) {
-	// 基本参数
+	// 必填参数组（当使用exec时）
 	cmd.Flags().String("request-url", "", "执行测试时的目标URL（使用-e参数时必需）")
-	cmd.Flags().String("request-method", "post", "执行测试时的请求方法（get/post，默认post）")
-	cmd.Flags().Bool("request-save", false, "执行测试时是否保存结果")
-	cmd.Flags().String("request-save-path", "", "执行测试时的结果保存路径（默认为当前目录下的result.csv）")
-	cmd.Flags().Int("request-timeout", 30, "执行测试时的请求超时时间（秒，默认30）")
-	cmd.Flags().Int("request-concurrent", 1, "执行测试时的并发请求数（默认1）")
 
-	// 请求体格式参数（互斥）
+	// 必填参数组 - 请求体格式（必须选择其一）
 	cmd.Flags().Bool("request-xml", false, "执行测试时使用XML格式发送请求体")
 	cmd.Flags().Bool("request-json", false, "执行测试时使用JSON格式发送请求体")
 
-	// 调试参数
-	cmd.Flags().Bool("request-debug", false, "执行测试时启用调试模式，输出详细的请求信息")
+	// 请求控制参数组
+	cmd.Flags().String("request-method", "post", "执行测试时的请求方法（get/post，默认post）")
+	cmd.Flags().Int("request-timeout", 30, "执行测试时的请求超时时间（秒，默认30）")
+	cmd.Flags().Int("request-concurrent", 1, "执行测试时的并发请求数（默认1）")
 
-	// 鉴权参数
+	// 结果保存参数组
+	cmd.Flags().Bool("request-save", false, "执行测试时是否保存结果")
+	cmd.Flags().String("request-save-path", "", "执行测试时的结果保存路径（默认为当前目录下的result.csv）")
+
+	// 鉴权参数组
 	cmd.Flags().String("request-auth-bearer", "", "执行测试时的Bearer Token认证")
 	cmd.Flags().String("request-auth-basic", "", "执行测试时的Basic Auth认证，格式：\"username:password\"")
 	cmd.Flags().String("request-auth-api-key", "", "执行测试时的API Key认证（通过X-API-Key头）")
 
-	// 自定义HTTP头参数
+	// 自定义HTTP头参数组
 	cmd.Flags().StringSlice("request-header", []string{}, "执行测试时的自定义HTTP头，格式：\"Key: Value\"，可多次使用")
+
+	// 调试参数组
+	cmd.Flags().Bool("request-debug", false, "执行测试时启用调试模式，输出详细的请求信息")
 }
 
 // getRequestParams 从命令行参数中获取request相关参数
