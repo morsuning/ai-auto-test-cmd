@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -388,16 +389,101 @@ func maskAPIKey(apiKey string) string {
 	return apiKey[:4] + strings.Repeat("*", len(apiKey)-8) + apiKey[len(apiKey)-4:]
 }
 
-// generateUserID 生成动态用户标识：当前日期时间+8位随机字符串
+// generateUserID 生成基于用户IP地址的用户标识
+// 获取用户当前IP地址，确保在Windows和Linux下都能正常工作
 func generateUserID() string {
-	// 获取当前时间，格式为 YYYYMMDDHHMMSS
-	now := time.Now()
-	timeStr := now.Format("20060102150405")
+	// 尝试获取本机IP地址
+	ip := getLocalIP()
+	if ip == "" {
+		// 如果获取IP失败，使用时间戳作为后备方案
+		now := time.Now()
+		timeStr := now.Format("20060102150405")
+		randomStr := generateRandomString(8)
+		return "fallback_" + timeStr + randomStr
+	}
+	
+	// 将IP地址中的点替换为下划线，使其适合作为用户ID
+	userID := strings.ReplaceAll(ip, ".", "_")
+	userID = strings.ReplaceAll(userID, ":", "_") // 处理IPv6地址
+	
+	return "ip_" + userID
+}
 
-	// 生成8位随机字符串
-	randomStr := generateRandomString(8)
-
-	return timeStr + randomStr
+// getLocalIP 获取本机IP地址，支持Windows和Linux
+func getLocalIP() string {
+	// 方法1：通过连接外部地址获取本机IP（推荐方法，跨平台兼容性最好）
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	if err == nil {
+		defer conn.Close()
+		localAddr := conn.LocalAddr().(*net.UDPAddr)
+		return localAddr.IP.String()
+	}
+	
+	// 方法2：遍历网络接口获取非回环地址
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return ""
+	}
+	
+	for _, iface := range interfaces {
+		// 跳过回环接口和未启用的接口
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		
+		for _, addr := range addrs {
+			var ip net.IP
+			switch v := addr.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+			
+			// 跳过回环地址和IPv6地址，优先返回IPv4地址
+			if ip == nil || ip.IsLoopback() {
+				continue
+			}
+			
+			// 优先返回IPv4地址
+			if ip.To4() != nil {
+				return ip.String()
+			}
+		}
+	}
+	
+	// 如果没有找到IPv4地址，再次遍历寻找IPv6地址
+	for _, iface := range interfaces {
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		
+		for _, addr := range addrs {
+			var ip net.IP
+			switch v := addr.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+			
+			if ip != nil && !ip.IsLoopback() && ip.To4() == nil {
+				return ip.String()
+			}
+		}
+	}
+	
+	return ""
 }
 
 // generateRandomString 生成指定长度的随机字符串（包含字母和数字）
