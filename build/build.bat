@@ -1,9 +1,9 @@
 @echo off
 REM 构建脚本：用于交叉编译 API 自动化测试命令行工具 (atc)
-REM 支持的平台：Windows x86, macOS ARM, Linux ARM, Linux x86
+REM 支持的平台：Windows x86_64, macOS ARM64, Linux ARM64, Linux x86_64
 
 REM 设置版本号
-set VERSION=1.2.2
+set VERSION=1.2.3
 
 REM 设置输出目录
 set OUTPUT_DIR=.\bin

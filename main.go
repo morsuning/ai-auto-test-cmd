@@ -8,7 +8,7 @@ import (
 
 func main() {
 	// 显示欢迎信息
-	fmt.Println("API自动化测试命令行工具 (atc) v1.2.2")
+	fmt.Println("API自动化测试命令行工具 (atc) v1.2.3")
 	fmt.Println("使用 'atc --help' 获取更多信息")
 	fmt.Println()
 

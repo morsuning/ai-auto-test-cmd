@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # 构建脚本：用于交叉编译 API 自动化测试命令行工具 (atc)
-# 支持的平台：Windows x86, macOS ARM, Linux ARM, Linux x86
+# 支持的平台：Windows x86_64, macOS ARM64, Linux ARM64, Linux x86_64
 
 # 设置版本号
-VERSION="1.2.2"
+VERSION="1.2.3"
 
 # 设置输出目录
 OUTPUT_DIR="./bin"
