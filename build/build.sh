@@ -3,16 +3,13 @@
 # 构建脚本：用于交叉编译 API 自动化测试命令行工具 (atc)
 # 支持的平台：Windows x86_64, macOS ARM64, Linux ARM64, Linux x86_64
 
-# 设置版本号
-VERSION="1.2.3"
-
 # 设置输出目录
 OUTPUT_DIR="./bin"
 
 # 创建输出目录
 mkdir -p "$OUTPUT_DIR"
 
-echo "开始构建 API 自动化测试命令行工具 (atc) v$VERSION"
+echo "开始构建 API 自动化测试命令行工具 (atc) "
 echo "目标平台: Windows amd64, macOS arm64, Linux arm64, Linux amd64"
 echo ""
 
