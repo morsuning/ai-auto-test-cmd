@@ -86,23 +86,27 @@ jobs:
           echo "BUILD_TIME=${BUILD_TIME}" >> $GITHUB_OUTPUT
           echo "GIT_COMMIT=${GIT_COMMIT}" >> $GITHUB_OUTPUT
 
+      - name: Create dist directory
+        run: mkdir -p dist
+
       - name: Build for Windows
         run: |
-          GOOS=windows GOARCH=amd64 go build -ldflags "-X main.version=${{ steps.build_vars.outputs.VERSION }} -X main.buildTime=${{ steps.build_vars.outputs.BUILD_TIME }} -X main.gitCommit=${{ steps.build_vars.outputs.GIT_COMMIT }}" -o atc-windows-amd64.exe .
-          GOOS=windows GOARCH=arm64 go build -ldflags "-X main.version=${{ steps.build_vars.outputs.VERSION }} -X main.buildTime=${{ steps.build_vars.outputs.BUILD_TIME }} -X main.gitCommit=${{ steps.build_vars.outputs.GIT_COMMIT }}" -o atc-windows-arm64.exe .
+          GOOS=windows GOARCH=amd64 go build -ldflags "-X main.version=${{ steps.build_vars.outputs.VERSION }} -X main.buildTime=${{ steps.build_vars.outputs.BUILD_TIME }} -X main.gitCommit=${{ steps.build_vars.outputs.GIT_COMMIT }}" -o dist/atc-windows-amd64.exe .
+          GOOS=windows GOARCH=arm64 go build -ldflags "-X main.version=${{ steps.build_vars.outputs.VERSION }} -X main.buildTime=${{ steps.build_vars.outputs.BUILD_TIME }} -X main.gitCommit=${{ steps.build_vars.outputs.GIT_COMMIT }}" -o dist/atc-windows-arm64.exe .
 
       - name: Build for Linux
         run: |
-          GOOS=linux GOARCH=amd64 go build -ldflags "-X main.version=${{ steps.build_vars.outputs.VERSION }} -X main.buildTime=${{ steps.build_vars.outputs.BUILD_TIME }} -X main.gitCommit=${{ steps.build_vars.outputs.GIT_COMMIT }}" -o atc-linux-amd64 .
-          GOOS=linux GOARCH=arm64 go build -ldflags "-X main.version=${{ steps.build_vars.outputs.VERSION }} -X main.buildTime=${{ steps.build_vars.outputs.BUILD_TIME }} -X main.gitCommit=${{ steps.build_vars.outputs.GIT_COMMIT }}" -o atc-linux-arm64 .
+          GOOS=linux GOARCH=amd64 go build -ldflags "-X main.version=${{ steps.build_vars.outputs.VERSION }} -X main.buildTime=${{ steps.build_vars.outputs.BUILD_TIME }} -X main.gitCommit=${{ steps.build_vars.outputs.GIT_COMMIT }}" -o dist/atc-linux-amd64 .
+          GOOS=linux GOARCH=arm64 go build -ldflags "-X main.version=${{ steps.build_vars.outputs.VERSION }} -X main.buildTime=${{ steps.build_vars.outputs.BUILD_TIME }} -X main.gitCommit=${{ steps.build_vars.outputs.GIT_COMMIT }}" -o dist/atc-linux-arm64 .
 
       - name: Build for macOS
         run: |
-          GOOS=darwin GOARCH=amd64 go build -ldflags "-X main.version=${{ steps.build_vars.outputs.VERSION }} -X main.buildTime=${{ steps.build_vars.outputs.BUILD_TIME }} -X main.gitCommit=${{ steps.build_vars.outputs.GIT_COMMIT }}" -o atc-darwin-amd64 .
-          GOOS=darwin GOARCH=arm64 go build -ldflags "-X main.version=${{ steps.build_vars.outputs.VERSION }} -X main.buildTime=${{ steps.build_vars.outputs.BUILD_TIME }} -X main.gitCommit=${{ steps.build_vars.outputs.GIT_COMMIT }}" -o atc-darwin-arm64 .
+          GOOS=darwin GOARCH=amd64 go build -ldflags "-X main.version=${{ steps.build_vars.outputs.VERSION }} -X main.buildTime=${{ steps.build_vars.outputs.BUILD_TIME }} -X main.gitCommit=${{ steps.build_vars.outputs.GIT_COMMIT }}" -o dist/atc-darwin-amd64 .
+          GOOS=darwin GOARCH=arm64 go build -ldflags "-X main.version=${{ steps.build_vars.outputs.VERSION }} -X main.buildTime=${{ steps.build_vars.outputs.BUILD_TIME }} -X main.gitCommit=${{ steps.build_vars.outputs.GIT_COMMIT }}" -o dist/atc-darwin-arm64 .
 
       - name: Create checksums
         run: |
+          cd dist
           sha256sum * > checksums.txt
 
       - name: Generate release notes
