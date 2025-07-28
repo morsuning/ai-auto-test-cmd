@@ -15,23 +15,23 @@ func TestValidateTimezone(t *testing.T) {
 		// 基本有效时区
 		{"空时区", "", false},
 		{"UTC时区", "UTC", false},
-		
+
 		// 偏移量格式
 		{"正偏移量", "+08:00", false},
 		{"负偏移量", "-05:00", false},
 		{"零偏移量", "+00:00", false},
-		
+
 		// 无效偏移量格式
 		{"无效偏移量格式1", "+8:00", true},
 		{"无效偏移量格式2", "+08:0", true},
 		{"无效偏移量格式3", "08:00", true},
 		{"超出范围偏移量", "+25:00", true},
-		
+
 		// IANA 时区名称（在支持的系统上应该有效）
 		{"亚洲上海", "Asia/Shanghai", false},
 		{"美国纽约", "America/New_York", false},
 		{"欧洲伦敦", "Europe/London", false},
-		
+
 		// 无效的 IANA 格式
 		{"无斜杠", "AsiaShanghai", true},
 		{"以斜杠开头", "/Asia/Shanghai", true},
@@ -111,7 +111,7 @@ func TestIsValidIANATimezoneFormat(t *testing.T) {
 		{"包含下划线", "America/Los_Angeles", true},
 		{"包含连字符", "America/Port-au-Prince", true},
 		{"数字时区", "GMT+8", false}, // 这不是标准IANA格式
-		
+
 		// 无效的IANA时区格式
 		{"无斜杠", "AsiaShanghai", false},
 		{"以斜杠开头", "/Asia/Shanghai", false},
@@ -125,7 +125,7 @@ func TestIsValidIANATimezoneFormat(t *testing.T) {
 		{"无效字符-特殊符号", "Asia/Shanghai!", false},
 		{"过多层级", "Asia/China/Shanghai/District", false},
 		{"只有一层", "Asia", false},
-		
+
 		// 边界情况
 		{"最短有效格式", "A/B", true},
 		{"非标准区域但格式正确", "Custom/Zone", true},
@@ -145,8 +145,8 @@ func TestIsValidIANATimezoneFormat(t *testing.T) {
 // TestValidateTimezoneOffset 测试时区偏移量验证
 func TestValidateTimezoneOffset(t *testing.T) {
 	tests := []struct {
-		name   string
-		offset string
+		name    string
+		offset  string
 		wantErr bool
 	}{
 		// 有效偏移量
@@ -157,7 +157,7 @@ func TestValidateTimezoneOffset(t *testing.T) {
 		{"最大负偏移", "-12:00", false},
 		{"30分钟偏移", "+05:30", false},
 		{"45分钟偏移", "+09:45", false},
-		
+
 		// 无效偏移量
 		{"格式错误-缺少冒号", "+0800", true},
 		{"格式错误-单位数小时", "+8:00", true},
@@ -194,7 +194,7 @@ func BenchmarkValidateTimezone(b *testing.B) {
 		"America/New_York",
 		"Europe/London",
 	}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		for _, tz := range timezones {
@@ -212,7 +212,7 @@ func BenchmarkIsValidIANATimezoneFormat(b *testing.B) {
 		"Australia/Sydney",
 		"Pacific/Auckland",
 	}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		for _, tz := range timezones {

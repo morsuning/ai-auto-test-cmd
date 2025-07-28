@@ -675,9 +675,9 @@ func ValidateTimezone(timezone string) error {
 func isWindowsTimezoneValidationError(err error) bool {
 	// 检查错误信息是否包含 Windows 特有的时区错误关键词
 	errMsg := err.Error()
-	return strings.Contains(errMsg, "unknown time zone") || 
-		   strings.Contains(errMsg, "cannot find") ||
-		   strings.Contains(errMsg, "open /usr/share/zoneinfo")
+	return strings.Contains(errMsg, "unknown time zone") ||
+		strings.Contains(errMsg, "cannot find") ||
+		strings.Contains(errMsg, "open /usr/share/zoneinfo")
 }
 
 // isValidIANATimezoneFormat 验证 IANA 时区名称的基本格式
@@ -687,49 +687,49 @@ func isValidIANATimezoneFormat(timezone string) bool {
 	// 2. 不能以斜杠开头或结尾
 	// 3. 只能包含字母、数字、斜杠、下划线、连字符
 	// 4. 常见格式：Area/Location 或 Area/Location/Sublocation
-	
+
 	if !strings.Contains(timezone, "/") {
 		return false
 	}
-	
+
 	if strings.HasPrefix(timezone, "/") || strings.HasSuffix(timezone, "/") {
 		return false
 	}
-	
+
 	// 检查是否包含连续的斜杠
 	if strings.Contains(timezone, "//") {
 		return false
 	}
-	
+
 	// 验证字符集（字母、数字、斜杠、下划线、连字符）
 	for _, char := range timezone {
-		if !((char >= 'A' && char <= 'Z') || 
-			 (char >= 'a' && char <= 'z') || 
-			 (char >= '0' && char <= '9') || 
-			 char == '/' || char == '_' || char == '-') {
+		if !((char >= 'A' && char <= 'Z') ||
+			(char >= 'a' && char <= 'z') ||
+			(char >= '0' && char <= '9') ||
+			char == '/' || char == '_' || char == '-') {
 			return false
 		}
 	}
-	
+
 	// 检查是否为常见的有效 IANA 时区格式
 	parts := strings.Split(timezone, "/")
 	if len(parts) < 2 || len(parts) > 3 {
 		return false
 	}
-	
+
 	// 第一部分应该是有效的区域名称
 	validAreas := []string{
-		"Africa", "America", "Antarctica", "Arctic", "Asia", 
+		"Africa", "America", "Antarctica", "Arctic", "Asia",
 		"Atlantic", "Australia", "Europe", "Indian", "Pacific",
 	}
-	
+
 	area := parts[0]
 	for _, validArea := range validAreas {
 		if area == validArea {
 			return true
 		}
 	}
-	
+
 	// 如果不在标准区域列表中，但格式正确，也认为是有效的
 	// 这样可以支持一些特殊的时区名称
 	return len(area) > 0 && len(parts[1]) > 0

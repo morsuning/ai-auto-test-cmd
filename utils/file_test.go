@@ -119,7 +119,7 @@ func TestReadPromptFile(t *testing.T) {
 
 // contains 检查字符串是否包含子字符串（辅助函数）
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(substr) == 0 || 
+	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
 		(len(s) > len(substr) && func() bool {
 			for i := 0; i <= len(s)-len(substr); i++ {
 				if s[i:i+len(substr)] == substr {

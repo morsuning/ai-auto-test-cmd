@@ -284,7 +284,7 @@ func init() {
 
 	// 自定义参数显示顺序
 	difyGenCmd.Flags().SortFlags = false
-	
+
 	// 注意：url和api-key参数不再是必需的，可以从配置文件读取
 	// raw和file参数互斥，在Run函数中进行验证
 }

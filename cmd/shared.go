@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/spf13/cobra"
 	"github.com/morsuning/ai-auto-test-cmd/models"
 	"github.com/morsuning/ai-auto-test-cmd/utils"
+	"github.com/spf13/cobra"
 )
 
 // RequestParams 包含request命令的所有参数

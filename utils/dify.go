@@ -401,11 +401,11 @@ func generateUserID() string {
 		randomStr := generateRandomString(8)
 		return "fallback_" + timeStr + randomStr
 	}
-	
+
 	// 将IP地址中的点替换为下划线，使其适合作为用户ID
 	userID := strings.ReplaceAll(ip, ".", "_")
 	userID = strings.ReplaceAll(userID, ":", "_") // 处理IPv6地址
-	
+
 	return "ip_" + userID
 }
 
@@ -418,24 +418,24 @@ func getLocalIP() string {
 		localAddr := conn.LocalAddr().(*net.UDPAddr)
 		return localAddr.IP.String()
 	}
-	
+
 	// 方法2：遍历网络接口获取非回环地址
 	interfaces, err := net.Interfaces()
 	if err != nil {
 		return ""
 	}
-	
+
 	for _, iface := range interfaces {
 		// 跳过回环接口和未启用的接口
 		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
 			continue
 		}
-		
+
 		addrs, err := iface.Addrs()
 		if err != nil {
 			continue
 		}
-		
+
 		for _, addr := range addrs {
 			var ip net.IP
 			switch v := addr.(type) {
@@ -444,30 +444,30 @@ func getLocalIP() string {
 			case *net.IPAddr:
 				ip = v.IP
 			}
-			
+
 			// 跳过回环地址和IPv6地址，优先返回IPv4地址
 			if ip == nil || ip.IsLoopback() {
 				continue
 			}
-			
+
 			// 优先返回IPv4地址
 			if ip.To4() != nil {
 				return ip.String()
 			}
 		}
 	}
-	
+
 	// 如果没有找到IPv4地址，再次遍历寻找IPv6地址
 	for _, iface := range interfaces {
 		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
 			continue
 		}
-		
+
 		addrs, err := iface.Addrs()
 		if err != nil {
 			continue
 		}
-		
+
 		for _, addr := range addrs {
 			var ip net.IP
 			switch v := addr.(type) {
@@ -476,13 +476,13 @@ func getLocalIP() string {
 			case *net.IPAddr:
 				ip = v.IP
 			}
-			
+
 			if ip != nil && !ip.IsLoopback() && ip.To4() == nil {
 				return ip.String()
 			}
 		}
 	}
-	
+
 	return ""
 }
 

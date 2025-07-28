@@ -122,9 +122,9 @@ var requestCmd = &cobra.Command{
 
 		// 构建鉴权配置
 		authConfig := AuthConfig{
-			BearerToken: authBearer,
-			BasicAuth:   authBasic,
-			APIKey:      authAPIKey,
+			BearerToken:   authBearer,
+			BasicAuth:     authBasic,
+			APIKey:        authAPIKey,
 			CustomHeaders: customHeaders,
 		}
 

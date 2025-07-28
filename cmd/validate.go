@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/spf13/cobra"
-	"github.com/pelletier/go-toml/v2"
 	"github.com/morsuning/ai-auto-test-cmd/utils"
+	"github.com/pelletier/go-toml/v2"
+	"github.com/spf13/cobra"
 )
 
 // validateCmd 验证约束配置文件命令
@@ -81,7 +81,7 @@ func runValidate(cmd *cobra.Command, args []string) {
 // showConfigStats 显示配置统计信息
 func showConfigStats(configFile string) {
 	fmt.Println("\n📊 配置文件统计信息:")
-	
+
 	// 重新加载配置以获取统计信息
 	data, err := os.ReadFile(configFile)
 	if err != nil {
@@ -96,7 +96,7 @@ func showConfigStats(configFile string) {
 	// 统计约束字段数量
 	constraintCount := 0
 	constraintTypes := make(map[string]int)
-	
+
 	for key, value := range rawConfig {
 		if key != "builtin_data" {
 			constraintCount++

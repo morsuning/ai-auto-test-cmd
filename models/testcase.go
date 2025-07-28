@@ -15,13 +15,13 @@ type TestCase struct {
 
 // TestResult 表示一个测试结果
 type TestResult struct {
-	TestCaseID    string `json:"test_case_id"`     // 测试用例ID
-	Success       bool   `json:"success"`          // 是否成功
-	StatusCode    int    `json:"status_code"`      // HTTP状态码
-	ResponseBody  string `json:"response_body"`    // 响应体
-	RequestBody   string `json:"request_body"`     // 原始请求报文
-	Error         string `json:"error,omitempty"`  // 错误信息（如果有）
-	Duration      int64  `json:"duration"`         // 执行时间（毫秒）
+	TestCaseID   string `json:"test_case_id"`    // 测试用例ID
+	Success      bool   `json:"success"`         // 是否成功
+	StatusCode   int    `json:"status_code"`     // HTTP状态码
+	ResponseBody string `json:"response_body"`   // 响应体
+	RequestBody  string `json:"request_body"`    // 原始请求报文
+	Error        string `json:"error,omitempty"` // 错误信息（如果有）
+	Duration     int64  `json:"duration"`        // 执行时间（毫秒）
 }
 
 // TestSuite 表示一组测试用例

@@ -61,7 +61,7 @@ func ParseXML(xmlStr string) (map[string]any, error) {
 	if err != nil {
 		return nil, fmt.Errorf("解析XML失败: %v", err)
 	}
-	
+
 	// 提取原始根元素名称
 	// 跳过XML声明，找到第一个真正的元素
 	rootRegex := regexp.MustCompile(`<\?xml[^>]*>\s*<([^\s>/]+)[^>]*>`)
@@ -127,10 +127,10 @@ func extractXMLKeys(xmlStr string) []string {
 	// 找到根元素的开始和结束位置
 	rootStartRegex := regexp.MustCompile(fmt.Sprintf(`<%s[^>]*>`, regexp.QuoteMeta(rootElement)))
 	rootEndRegex := regexp.MustCompile(fmt.Sprintf(`</%s>`, regexp.QuoteMeta(rootElement)))
-	
+
 	startMatch := rootStartRegex.FindStringIndex(xmlStr)
 	endMatch := rootEndRegex.FindStringIndex(xmlStr)
-	
+
 	if startMatch == nil || endMatch == nil {
 		return keys
 	}
@@ -145,25 +145,25 @@ func extractXMLKeys(xmlStr string) []string {
 		for pos < len(rootContent) && (rootContent[pos] == ' ' || rootContent[pos] == '\n' || rootContent[pos] == '\t' || rootContent[pos] == '\r') {
 			pos++
 		}
-		
+
 		if pos >= len(rootContent) {
 			break
 		}
-		
+
 		// 查找下一个开始标签
 		if rootContent[pos] == '<' {
 			// 提取标签名
 			tagStart := pos + 1
 			tagEnd := tagStart
-			
+
 			// 找到标签名的结束位置
 			for tagEnd < len(rootContent) && rootContent[tagEnd] != ' ' && rootContent[tagEnd] != '>' && rootContent[tagEnd] != '/' {
 				tagEnd++
 			}
-			
+
 			if tagEnd > tagStart {
 				tagName := rootContent[tagStart:tagEnd]
-				
+
 				// 忽略结束标签
 				if !strings.HasPrefix(tagName, "/") && tagName != "" {
 					// 避免重复添加
@@ -171,7 +171,7 @@ func extractXMLKeys(xmlStr string) []string {
 						keys = append(keys, tagName)
 						seenKeys[tagName] = true
 					}
-					
+
 					// 跳过整个元素（包括其内容和结束标签）
 					if pos+1 < len(rootContent) && rootContent[pos+1] != '/' {
 						// 不是自闭合标签，需要找到对应的结束标签
@@ -1018,7 +1018,7 @@ func ConvertToXMLRows(testCases []map[string]any) [][]string {
 // convertMapToXML 将map转换为XML字符串
 func convertMapToXML(data map[string]any) (string, error) {
 	var xmlBuilder strings.Builder
-	
+
 	// 只有当原始XML包含XML声明时才添加XML声明
 	if originalHasXMLDeclaration {
 		if originalXMLDeclaration != "" {
@@ -1035,42 +1035,42 @@ func convertMapToXML(data map[string]any) (string, error) {
 	if rootElement == "" {
 		rootElement = "root"
 	}
-	
+
 	// 构建XML内容
 	xmlContent := buildXMLContent(data, "")
-	
+
 	// 如果内容为空，使用自闭合标签
 	if strings.TrimSpace(xmlContent) == "" {
 		xmlBuilder.WriteString(fmt.Sprintf("<%s />", rootElement))
 	} else {
 		xmlBuilder.WriteString(fmt.Sprintf("<%s>%s</%s>", rootElement, xmlContent, rootElement))
 	}
-	
+
 	return xmlBuilder.String(), nil
 }
 
 // buildXMLContent 递归构建XML内容
 func buildXMLContent(data map[string]any, indent string) string {
 	var xmlBuilder strings.Builder
-	
+
 	// 对于嵌套结构，不使用全局的originalKeyOrder，而是使用当前map的键
 	keys := make([]string, 0, len(data))
 	for key := range data {
 		keys = append(keys, key)
 	}
-	
+
 	// 如果是根级别且有保存的顺序，则使用保存的顺序
 	if indent == "" && len(originalKeyOrder) > 0 {
 		keys = originalKeyOrder
 	}
-	
+
 	hasContent := false
 	for _, key := range keys {
 		value, exists := data[key]
 		if !exists {
 			continue
 		}
-		
+
 		if !hasContent {
 			xmlBuilder.WriteString(" ")
 			hasContent = true
@@ -1159,11 +1159,9 @@ func buildXMLContent(data map[string]any, indent string) string {
 			xmlBuilder.WriteString(fmt.Sprintf("<%s>%v</%s>", cleanKey, v, cleanKey))
 		}
 	}
-	
+
 	return xmlBuilder.String()
 }
-
-
 
 // escapeXMLValue 转义XML特殊字符
 func escapeXMLValue(value string) string {
@@ -1274,7 +1272,7 @@ func customJSONMarshal(data map[string]any) (string, error) {
 			}
 			// 对键进行排序以保证一致性
 			sort.Strings(nestedKeys)
-			
+
 			firstNested := true
 			for _, nestedKey := range nestedKeys {
 				nestedValue := v[nestedKey]
@@ -1282,10 +1280,10 @@ func customJSONMarshal(data map[string]any) (string, error) {
 					result.WriteString(",")
 				}
 				firstNested = false
-				
+
 				// 写入嵌套键
 				result.WriteString(fmt.Sprintf(`"%s":`, nestedKey))
-				
+
 				// 处理嵌套值
 				switch nestedVal := nestedValue.(type) {
 				case string:
