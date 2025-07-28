@@ -103,7 +103,6 @@ jobs:
 
       - name: Create checksums
         run: |
-          cd dist
           sha256sum * > checksums.txt
 
       - name: Generate release notes
