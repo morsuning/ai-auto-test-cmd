@@ -95,11 +95,25 @@ jobs:
 
       - name: Build for multiple platforms
         run: |
-          # 测试构建不同平台
-          GOOS=windows GOARCH=amd64 go build -o atc-windows-amd64.exe .
-          GOOS=linux GOARCH=amd64 go build -o atc-linux-amd64 .
-          GOOS=darwin GOARCH=amd64 go build -o atc-darwin-amd64 .
-          GOOS=darwin GOARCH=arm64 go build -o atc-darwin-arm64 .
+          # 设置构建信息
+          BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          GIT_COMMIT=$(git rev-parse --short HEAD)
+          VERSION="dev-${GIT_COMMIT}"
+          
+          # 创建构建目录
+          mkdir -p build
+          
+          # Windows builds
+          GOOS=windows GOARCH=amd64 go build -ldflags "-X main.version=${VERSION} -X main.buildTime=${BUILD_TIME} -X main.gitCommit=${GIT_COMMIT}" -o build/atc-windows-amd64.exe .
+          GOOS=windows GOARCH=arm64 go build -ldflags "-X main.version=${VERSION} -X main.buildTime=${BUILD_TIME} -X main.gitCommit=${GIT_COMMIT}" -o build/atc-windows-arm64.exe .
+          
+          # Linux builds
+          GOOS=linux GOARCH=amd64 go build -ldflags "-X main.version=${VERSION} -X main.buildTime=${BUILD_TIME} -X main.gitCommit=${GIT_COMMIT}" -o build/atc-linux-amd64 .
+          GOOS=linux GOARCH=arm64 go build -ldflags "-X main.version=${VERSION} -X main.buildTime=${BUILD_TIME} -X main.gitCommit=${GIT_COMMIT}" -o build/atc-linux-arm64 .
+          
+          # macOS builds
+          GOOS=darwin GOARCH=amd64 go build -ldflags "-X main.version=${VERSION} -X main.buildTime=${BUILD_TIME} -X main.gitCommit=${GIT_COMMIT}" -o build/atc-darwin-amd64 .
+          GOOS=darwin GOARCH=arm64 go build -ldflags "-X main.version=${VERSION} -X main.buildTime=${BUILD_TIME} -X main.gitCommit=${GIT_COMMIT}" -o build/atc-darwin-arm64 .
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4

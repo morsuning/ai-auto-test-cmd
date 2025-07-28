@@ -76,29 +76,30 @@ jobs:
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
-      - name: Build binaries
+      - name: Set build variables
+        id: build_vars
         run: |
-          # 创建构建目录
-          mkdir -p dist
-          
-          # 构建不同平台的二进制文件
-          # Windows amd64
-          GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o dist/atc-windows-amd64.exe .
-          
-          # Windows arm64
-          GOOS=windows GOARCH=arm64 go build -ldflags="-s -w" -o dist/atc-windows-arm64.exe .
-          
-          # Linux amd64
-          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o dist/atc-linux-amd64 .
-          
-          # Linux arm64
-          GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o dist/atc-linux-arm64 .
-          
-          # macOS amd64
-          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o dist/atc-darwin-amd64 .
-          
-          # macOS arm64 (Apple Silicon)
-          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o dist/atc-darwin-arm64 .
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          GIT_COMMIT=$(git rev-parse --short HEAD)
+          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+          echo "BUILD_TIME=${BUILD_TIME}" >> $GITHUB_OUTPUT
+          echo "GIT_COMMIT=${GIT_COMMIT}" >> $GITHUB_OUTPUT
+
+      - name: Build for Windows
+        run: |
+          GOOS=windows GOARCH=amd64 go build -ldflags "-X main.version=${{ steps.build_vars.outputs.VERSION }} -X main.buildTime=${{ steps.build_vars.outputs.BUILD_TIME }} -X main.gitCommit=${{ steps.build_vars.outputs.GIT_COMMIT }}" -o atc-windows-amd64.exe .
+          GOOS=windows GOARCH=arm64 go build -ldflags "-X main.version=${{ steps.build_vars.outputs.VERSION }} -X main.buildTime=${{ steps.build_vars.outputs.BUILD_TIME }} -X main.gitCommit=${{ steps.build_vars.outputs.GIT_COMMIT }}" -o atc-windows-arm64.exe .
+
+      - name: Build for Linux
+        run: |
+          GOOS=linux GOARCH=amd64 go build -ldflags "-X main.version=${{ steps.build_vars.outputs.VERSION }} -X main.buildTime=${{ steps.build_vars.outputs.BUILD_TIME }} -X main.gitCommit=${{ steps.build_vars.outputs.GIT_COMMIT }}" -o atc-linux-amd64 .
+          GOOS=linux GOARCH=arm64 go build -ldflags "-X main.version=${{ steps.build_vars.outputs.VERSION }} -X main.buildTime=${{ steps.build_vars.outputs.BUILD_TIME }} -X main.gitCommit=${{ steps.build_vars.outputs.GIT_COMMIT }}" -o atc-linux-arm64 .
+
+      - name: Build for macOS
+        run: |
+          GOOS=darwin GOARCH=amd64 go build -ldflags "-X main.version=${{ steps.build_vars.outputs.VERSION }} -X main.buildTime=${{ steps.build_vars.outputs.BUILD_TIME }} -X main.gitCommit=${{ steps.build_vars.outputs.GIT_COMMIT }}" -o atc-darwin-amd64 .
+          GOOS=darwin GOARCH=arm64 go build -ldflags "-X main.version=${{ steps.build_vars.outputs.VERSION }} -X main.buildTime=${{ steps.build_vars.outputs.BUILD_TIME }} -X main.gitCommit=${{ steps.build_vars.outputs.GIT_COMMIT }}" -o atc-darwin-arm64 .
 
       - name: Create checksums
         run: |
@@ -110,18 +111,91 @@ jobs:
         run: |
           # 获取上一个标签
           PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          CURRENT_TAG="${{ steps.version.outputs.VERSION }}"
           
           # 生成变更日志
-          echo "## 🚀 新功能特性" > release_notes.md
+          echo "## 🚀 版本 ${CURRENT_TAG}" > release_notes.md
           echo "" >> release_notes.md
           
           if [ -n "$PREVIOUS_TAG" ]; then
-            echo "### 📋 变更内容 ($PREVIOUS_TAG...${{ steps.version.outputs.VERSION }})" >> release_notes.md
+            echo "### 📋 变更内容 (${PREVIOUS_TAG}...${CURRENT_TAG})" >> release_notes.md
             echo "" >> release_notes.md
             
-            # 获取提交信息
-            git log --pretty=format:"- %s" $PREVIOUS_TAG..HEAD >> release_notes.md
+            # 获取提交范围
+            COMMIT_RANGE="${PREVIOUS_TAG}..HEAD"
+            
+            # 分类收集提交信息
+            FEAT_COMMITS=$(git log --pretty=format:"%s" $COMMIT_RANGE | grep -E "^feat(\(.+\))?:" | sed 's/^feat[^:]*: /- /' || true)
+            FIX_COMMITS=$(git log --pretty=format:"%s" $COMMIT_RANGE | grep -E "^fix(\(.+\))?:" | sed 's/^fix[^:]*: /- /' || true)
+            DOCS_COMMITS=$(git log --pretty=format:"%s" $COMMIT_RANGE | grep -E "^docs(\(.+\))?:" | sed 's/^docs[^:]*: /- /' || true)
+            REFACTOR_COMMITS=$(git log --pretty=format:"%s" $COMMIT_RANGE | grep -E "^(refactor|style|perf)(\(.+\))?:" | sed 's/^[^:]*: /- /' || true)
+            TEST_COMMITS=$(git log --pretty=format:"%s" $COMMIT_RANGE | grep -E "^test(\(.+\))?:" | sed 's/^test[^:]*: /- /' || true)
+            BUILD_COMMITS=$(git log --pretty=format:"%s" $COMMIT_RANGE | grep -E "^(build|ci|chore)(\(.+\))?:" | sed 's/^[^:]*: /- /' || true)
+            
+            # 其他提交（不符合conventional commits格式的）
+            OTHER_COMMITS=$(git log --pretty=format:"%s" $COMMIT_RANGE | grep -vE "^(feat|fix|docs|refactor|style|perf|test|build|ci|chore)(\(.+\))?:" | grep -v "^Merge " | sed 's/^/- /' || true)
+            
+            # 输出分类的变更内容
+            if [ -n "$FEAT_COMMITS" ]; then
+              echo "#### 🚀 新功能" >> release_notes.md
+              echo "$FEAT_COMMITS" >> release_notes.md
+              echo "" >> release_notes.md
+            fi
+            
+            if [ -n "$FIX_COMMITS" ]; then
+              echo "#### 🐛 问题修复" >> release_notes.md
+              echo "$FIX_COMMITS" >> release_notes.md
+              echo "" >> release_notes.md
+            fi
+            
+            if [ -n "$REFACTOR_COMMITS" ]; then
+              echo "#### 🎨 代码优化" >> release_notes.md
+              echo "$REFACTOR_COMMITS" >> release_notes.md
+              echo "" >> release_notes.md
+            fi
+            
+            if [ -n "$DOCS_COMMITS" ]; then
+              echo "#### 📚 文档更新" >> release_notes.md
+              echo "$DOCS_COMMITS" >> release_notes.md
+              echo "" >> release_notes.md
+            fi
+            
+            if [ -n "$TEST_COMMITS" ]; then
+              echo "#### 🧪 测试相关" >> release_notes.md
+              echo "$TEST_COMMITS" >> release_notes.md
+              echo "" >> release_notes.md
+            fi
+            
+            if [ -n "$BUILD_COMMITS" ]; then
+              echo "#### 🔧 构建/工具" >> release_notes.md
+              echo "$BUILD_COMMITS" >> release_notes.md
+              echo "" >> release_notes.md
+            fi
+            
+            if [ -n "$OTHER_COMMITS" ]; then
+              echo "#### 📝 其他变更" >> release_notes.md
+              echo "$OTHER_COMMITS" >> release_notes.md
+              echo "" >> release_notes.md
+            fi
+            
+            # 获取提交统计信息
+            COMMIT_COUNT=$(git rev-list --count $COMMIT_RANGE)
+            AUTHOR_COUNT=$(git log --pretty=format:"%an" $COMMIT_RANGE | sort -u | wc -l)
+            
+            echo "#### 📊 统计信息" >> release_notes.md
+            echo "- **提交数量**: ${COMMIT_COUNT}" >> release_notes.md
+            echo "- **贡献者**: ${AUTHOR_COUNT}" >> release_notes.md
+            echo "- **变更范围**: ${PREVIOUS_TAG}...${CURRENT_TAG}" >> release_notes.md
             echo "" >> release_notes.md
+          else
+            echo "这是项目的首个正式版本发布！🎉" >> release_notes.md
+            echo "" >> release_notes.md
+            
+            # 获取所有提交的统计
+            TOTAL_COMMITS=$(git rev-list --count HEAD)
+            echo "#### 📊 项目统计" >> release_notes.md
+            echo "- **总提交数**: ${TOTAL_COMMITS}" >> release_notes.md
+            echo "- **首次发布**: ${CURRENT_TAG}" >> release_notes.md
             echo "" >> release_notes.md
           fi
           
