@@ -9,9 +9,9 @@ import (
 // 版本信息，通过 ldflags 在构建时注入
 // 使用方法: go build -ldflags="-X main.version=v1.2.3" -o atc .
 var (
-	version   = "dev"      // 版本号，默认为开发版本
-	buildTime = "unknown"  // 构建时间
-	gitCommit = "unknown"  // Git提交哈希
+	version   = "dev"     // 版本号，默认为开发版本
+	buildTime = "unknown" // 构建时间
+	gitCommit = "unknown" // Git提交哈希
 )
 
 func main() {
