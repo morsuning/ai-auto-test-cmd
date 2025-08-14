@@ -925,8 +925,7 @@ func splitXMLObjectsByDelimiter(text string) []string {
 
 	// 使用$$$$作为分隔符分割文本
 	delimiter := "$$$$"
-	// 使用SplitAfter更高效地分割文本
-	parts := strings.SplitAfter(text, delimiter)
+	parts := strings.Split(text, delimiter)
 
 	// 处理每个分割后的部分
 	for _, part := range parts {
