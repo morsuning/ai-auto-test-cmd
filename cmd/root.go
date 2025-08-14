@@ -13,7 +13,7 @@ var rootCmd = &cobra.Command{
 	Short: "API自动化测试命令行工具",
 	Long: `API自动化测试命令行工具(atc)是一个用于简化API测试流程的工具，支持以下功能：
 
-1. 通过Dify Chatflow API生成测试用例
+1. 通过LLM生成测试用例
 2. 本地生成测试用例
 3. 批量执行测试请求并保存结果
 

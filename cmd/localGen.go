@@ -18,93 +18,150 @@ var localGenCmd = &cobra.Command{
 
 示例：
   # 本地根据正例xml报文生成10条测试用例
-  atc local-gen --xml --raw "xxxx" -n 10
+  atc local-gen --xml "<root><name>test</name></root>" -n 10
 
   # 本地根据正例json报文生成15条测试用例
-  atc local-gen --json --raw "xxxx" -n 15
+  atc local-gen --json '{"name":"test","age":25}' -n 15
 
-  # 从XML文件读取正例报文生成测试用例
-  atc local-gen --xml -f example.xml -n 20
+  # 使用配置文件中的正例报文和用例设置生成测试用例
+  atc local-gen -c config.toml
 
-  # 从JSON文件读取正例报文生成测试用例
-  atc local-gen --json -f example.json -n 25
+  # 命令行参数覆盖配置文件中的正例报文
+  atc local-gen -c config.toml --json '{"name":"test"}'
 
-  # 使用默认约束配置生成智能测试用例
-  atc local-gen --json -f example.json -n 10 --constraints
+  # 使用配置文件中的约束配置和用例设置生成智能测试用例
+  atc local-gen -c config.toml -n 20
 
-  # 使用自定义约束配置文件生成测试用例
-  atc local-gen --json -f example.json -n 10 --constraints-file custom.toml`,
+  # 生成测试用例并立即执行（从配置文件读取request参数）
+  atc local-gen -c config.toml -e`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// 获取命令行参数
-		raw, _ := cmd.Flags().GetString("raw")
-		file, _ := cmd.Flags().GetString("file")
+		xmlContent, _ := cmd.Flags().GetString("xml")
+		jsonContent, _ := cmd.Flags().GetString("json")
 		num, _ := cmd.Flags().GetInt("num")
-		isXML, _ := cmd.Flags().GetBool("xml")
-		isJSON, _ := cmd.Flags().GetBool("json")
 		output, _ := cmd.Flags().GetString("output")
-		useConstraints, _ := cmd.Flags().GetBool("constraints")
-		constraintsFile, _ := cmd.Flags().GetString("constraints-file")
+		configFile, _ := cmd.Flags().GetString("config")
 		exec, _ := cmd.Flags().GetBool("exec")
 
-		// 如果使用exec参数，验证request相关参数
+		// 从配置文件读取参数（如果指定了配置文件）
+		var config *utils.Config
+		if configFile != "" {
+			var err error
+			config, err = utils.LoadConfig(configFile)
+			if err != nil {
+				fmt.Printf("❌ 加载配置文件失败: %v\n", err)
+				return
+			}
+
+			// 从配置文件补充缺失的参数
+			if num == 10 && config.TestCase.Num != 0 { // 只有当num是默认值时才从配置文件读取
+				num = config.TestCase.Num
+			}
+			if output == "" && config.TestCase.Output != "" {
+				output = config.TestCase.Output
+			}
+		}
+
+		// 确定输入格式和内容
+		var isXML, isJSON bool
+		var inputContent string
+
+		if xmlContent != "" && jsonContent != "" {
+			fmt.Println("❌ 错误: 不能同时指定 --xml 和 --json 参数")
+			return
+		}
+
+		if xmlContent != "" {
+			isXML = true
+			inputContent = xmlContent
+			// 验证XML格式
+			if err := utils.ValidateXMLFormat(xmlContent); err != nil {
+				fmt.Printf("❌ XML格式验证失败: %v\n", err)
+				return
+			}
+		} else if jsonContent != "" {
+			isJSON = true
+			inputContent = jsonContent
+			// 验证JSON格式
+			if err := utils.ValidateJSONFormat(jsonContent); err != nil {
+				fmt.Printf("❌ JSON格式验证失败: %v\n", err)
+				return
+			}
+		} else {
+			// 从配置文件读取正例报文
+			if config == nil {
+				fmt.Println("❌ 错误: 必须指定报文内容（--xml 'content' 或 --json 'content'）或在配置文件中设置正例报文")
+				return
+			}
+
+			// 根据配置文件中的报文类型和内容确定格式
+			if config.TestCase.Type == "xml" && config.TestCase.PositiveExample != "" {
+				isXML = true
+				inputContent = config.TestCase.PositiveExample
+				// 验证XML格式
+				if err := utils.ValidateXMLFormat(inputContent); err != nil {
+					fmt.Printf("❌ 配置文件中的XML格式验证失败: %v\n", err)
+					return
+				}
+				fmt.Println("📄 从配置文件读取正例XML报文")
+			} else if config.TestCase.Type == "json" && config.TestCase.PositiveExample != "" {
+				isJSON = true
+				inputContent = config.TestCase.PositiveExample
+				// 验证JSON格式
+				if err := utils.ValidateJSONFormat(inputContent); err != nil {
+					fmt.Printf("❌ 配置文件中的JSON格式验证失败: %v\n", err)
+					return
+				}
+				fmt.Println("📄 从配置文件读取正例JSON报文")
+			} else {
+				fmt.Println("❌ 错误: 必须指定报文内容（--xml 'content' 或 --json 'content'）或在配置文件中正确设置正例报文")
+				fmt.Println("💡 提示: 在配置文件中设置 type=\"xml\" 和 positive_example，或设置 type=\"json\" 和 positive_example")
+				return
+			}
+		}
+
+		// 如果使用exec参数，从配置文件读取request相关参数
 		var requestParams RequestParams
 		if exec {
-			var err error
-			requestParams, err = getRequestParams(cmd)
+			if configFile == "" {
+				configFile = "config.toml"
+			}
+			config, err := utils.LoadConfig(configFile)
 			if err != nil {
-				fmt.Printf("❌ 获取执行参数失败: %v\n", err)
+				fmt.Printf("❌ 加载配置文件失败: %v\n", err)
 				return
 			}
+
+			requestParams = RequestParams{
+				URL:           config.Request.URL,
+				Method:        config.Request.Method,
+				Save:          config.Request.SavePath != "",
+				SavePath:      config.Request.SavePath,
+				Timeout:       config.Request.Timeout,
+				Concurrent:    config.Request.Concurrent,
+				AuthBearer:    config.Request.AuthBearer,
+				AuthBasic:     config.Request.AuthBasic,
+				AuthAPIKey:    config.Request.AuthAPIKey,
+				CustomHeaders: config.Request.Headers,
+				IsXML:         isXML,
+				IsJSON:        isJSON,
+			}
+
+			// 设置默认值
+			if requestParams.Method == "" {
+				requestParams.Method = "post"
+			}
+			if requestParams.Timeout == 0 {
+				requestParams.Timeout = 30
+			}
+			if requestParams.Concurrent == 0 {
+				requestParams.Concurrent = 1
+			}
+
 			if err := validateRequestParams(requestParams); err != nil {
-				fmt.Printf("❌ 执行参数验证失败: %v\n", err)
+				fmt.Printf("❌ 配置文件中的request参数验证失败: %v\n", err)
 				return
 			}
-		}
-
-		// 检查输入方式：必须指定raw或file其中之一
-		if raw == "" && file == "" {
-			fmt.Println("错误: 必须指定正例输入方式（--raw 或 -f）")
-			return
-		}
-		if raw != "" && file != "" {
-			fmt.Println("错误: 不能同时指定 --raw 和 -f 参数")
-			return
-		}
-
-		// 确定输入格式
-		var format string
-		if isXML {
-			format = "xml"
-		} else if isJSON {
-			format = "json"
-		} else {
-			fmt.Println("错误: 必须指定报文格式（--xml 或 --json）")
-			return
-		}
-
-		// 如果指定了文件输入，读取并验证文件内容
-		var inputContent string
-		if file != "" {
-			content, err := utils.ReadAndValidateFileContent(file, format)
-			if err != nil {
-				fmt.Printf("文件读取或格式验证失败: %v\n", err)
-				return
-			}
-			inputContent = content
-			fmt.Printf("从文件读取并验证正例: %s\n", file)
-		} else {
-			// 验证命令行输入的格式
-			var err error
-			if format == "xml" {
-				err = utils.ValidateXMLFormat(raw)
-			} else {
-				err = utils.ValidateJSONFormat(raw)
-			}
-			if err != nil {
-				fmt.Printf("输入格式验证失败: %v\n", err)
-				return
-			}
-			inputContent = raw
 		}
 
 		// 设置默认输出文件
@@ -113,33 +170,28 @@ var localGenCmd = &cobra.Command{
 		}
 
 		// 打印参数信息
-		fmt.Println("本地生成测试用例")
-		fmt.Printf("报文格式: %s\n", getFormatName(isXML, isJSON))
-		if file != "" {
-			fmt.Printf("输入文件: %s\n", file)
-		} else {
-			fmt.Printf("原始报文: %s\n", inputContent)
-		}
-		fmt.Printf("生成数量: %d\n", num)
-		fmt.Printf("输出文件: %s\n", output)
+		fmt.Println("🔧 本地生成测试用例")
+		fmt.Printf("📝 报文格式: %s\n", getFormatName(isXML, isJSON))
+		fmt.Printf("📄 原始报文: %s\n", inputContent)
+		fmt.Printf("� 生成入数量: %d\n", num)
+		fmt.Printf("💾 输出文件: %s\n", output)
 
-		// 加载约束配置
-		if useConstraints || constraintsFile != "" {
-			fmt.Println("启用约束模式")
-			if constraintsFile != "" {
-				fmt.Printf("加载约束配置文件: %s\n", constraintsFile)
-				if err := utils.LoadConstraintConfig(constraintsFile); err != nil {
-					fmt.Printf("加载约束配置失败: %v\n", err)
-					return
-				}
-				fmt.Println("约束配置加载成功")
+		// 加载配置文件（包含约束配置）
+		var useConstraints bool
+		if configFile != "" {
+			fmt.Printf("📄 加载配置文件: %s\n", configFile)
+			config, err := utils.LoadConfigWithConstraints(configFile)
+			if err != nil {
+				fmt.Printf("❌ 加载配置文件失败: %v\n", err)
+				return
+			}
+
+			// 检查是否包含约束配置
+			if len(config.Constraints) > 0 || len(config.BuiltinData.FirstNames) > 0 {
+				useConstraints = true
+				fmt.Println("✅ 约束配置加载成功，启用智能约束模式")
 			} else {
-				fmt.Println("加载默认约束配置")
-				if err := utils.LoadDefaultConstraints(); err != nil {
-					fmt.Printf("加载默认约束配置失败: %v\n", err)
-					return
-				}
-				fmt.Println("默认约束配置加载成功")
+				fmt.Println("📋 配置文件中未包含约束配置，使用随机变化模式")
 			}
 		}
 
@@ -164,9 +216,9 @@ var localGenCmd = &cobra.Command{
 		}
 
 		// 生成测试用例
-		fmt.Println("正在生成测试用例...")
+		fmt.Println("🔄 正在生成测试用例...")
 		var testCases []map[string]any
-		if useConstraints || constraintsFile != "" {
+		if useConstraints {
 			testCases = utils.GenerateTestCasesWithConstraints(data, num, true)
 		} else {
 			testCases = utils.GenerateTestCases(data, num)
@@ -188,7 +240,7 @@ var localGenCmd = &cobra.Command{
 			fmt.Printf("保存CSV文件失败: %v\n", err)
 			return
 		}
-		fmt.Printf("成功生成 %d 条测试用例并保存到 %s\n", num, output)
+		fmt.Printf("✅ 成功生成 %d 条测试用例并保存到 %s\n", num, output)
 
 		// 如果使用exec参数，执行生成的测试用例
 		if exec {
@@ -231,20 +283,15 @@ var localGenCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(localGenCmd)
 
-	// 必填参数组 - 报文格式（必须选择其一）
-	localGenCmd.Flags().BoolP("xml", "x", false, "使用XML格式")
-	localGenCmd.Flags().BoolP("json", "j", false, "使用JSON格式")
-
-	// 必填参数组 - 输入方式（必须选择其一）
-	localGenCmd.Flags().StringP("raw", "r", "", "请求参数（正例报文）")
-	localGenCmd.Flags().StringP("file", "f", "", "正例报文文件路径")
+	// 必填参数组 - 报文格式和内容（必须选择其一）
+	localGenCmd.Flags().StringP("xml", "x", "", "XML格式报文内容")
+	localGenCmd.Flags().StringP("json", "j", "", "JSON格式报文内容")
 
 	// 生成控制参数组
 	localGenCmd.Flags().IntP("num", "n", 10, "生成用例数量（默认10）")
 
-	// 约束控制参数组
-	localGenCmd.Flags().BoolP("constraints", "c", false, "启用智能约束模式（使用默认配置）")
-	localGenCmd.Flags().StringP("constraints-file", "C", "", "指定约束配置文件路径")
+	// 配置文件参数组
+	localGenCmd.Flags().StringP("config", "c", "", "配置文件路径（包含约束配置和其他设置）")
 
 	// 输出控制参数组
 	localGenCmd.Flags().StringP("output", "o", "", "输出文件路径（默认为当前目录下的test_cases.csv）")
@@ -252,8 +299,7 @@ func init() {
 	// 执行控制参数组
 	localGenCmd.Flags().BoolP("exec", "e", false, "生成测试用例后立即执行")
 
-	// 添加request相关参数（当使用exec时需要）
-	addRequestFlags(localGenCmd)
+	// 注意：使用-e参数时，request相关参数从配置文件读取
 
 	// 自定义参数显示顺序
 	localGenCmd.Flags().SortFlags = false

@@ -17,7 +17,7 @@ ATC (API Test Command) 是一个功能强大的API自动化测试命令行工具
 - **数据变化规则**：数值50%波动，字符串10%长度变化
 
 ### 🤖 AI智能生成
-- **Dify API集成**：通过Dify Chatflow API生成智能测试用例
+- **LLM API集成**：通过LLM生成智能测试用例
 - **配置文件支持**：支持从config.toml文件读取API配置
 - **多种输入方式**：支持命令行输入和文件输入
 - **流式响应处理**：实时显示生成进度
@@ -31,7 +31,7 @@ ATC (API Test Command) 是一个功能强大的API自动化测试命令行工具
 - **结果保存**：支持CSV格式结果导出
 
 ### ⚡ 一键生成并执行
-- **无缝集成**：`dify-gen`和`local-gen`命令支持`--exec(-e)`参数
+- **无缝集成**：`llm-gen`和`local-gen`命令支持`--exec(-e)`参数
 - **自动执行**：生成测试用例后立即执行HTTP请求测试
 - **参数复用**：支持`request`命令的所有参数和功能
 - **流程简化**：一条命令完成从生成到执行的完整测试流程
@@ -91,11 +91,11 @@ atc local-gen '{"name":"张三","age":25,"email":"test@example.com"}' --json --n
 # 从XML正例生成测试用例
 atc local-gen '<user><name>张三</name><age>25</age></user>' --xml --num 5
 
-# 从文件读取正例并生成
-atc local-gen -f examples/json_example.json --json --num 20
+# 使用配置文件中的正例报文和用例设置
+atc local-gen -c config.toml
 
 # 使用智能约束系统生成
-atc local-gen -f examples/json_example.json --json --num 10 --constraints
+atc local-gen -c config.toml --num 10
 ```
 
 ### 2. 执行接口测试
@@ -121,22 +121,22 @@ atc request -u https://api.example.com/users -m post -f testcases.csv --json -s 
 
 ```bash
 # 使用默认配置文件生成测试用例
-atc dify-gen --xml --raw "<user><name>张三</name></user>" -n 5
+atc llm-gen --xml "<user><name>张三</name></user>" -n 5
 
 # 指定配置文件生成测试用例
-atc dify-gen -c my-config.toml --json --raw '{"name":"test"}' -n 3
+atc llm-gen -c my-config.toml --json '{"name":"test"}' -n 3
 
-# 从文件读取输入并生成
-atc dify-gen --json -f input.json -n 5 --debug
+# 使用配置文件中的正例报文生成
+atc llm-gen -c config.toml -n 5 --debug
 
 # 使用自定义提示词文件生成测试用例
-atc dify-gen --xml --raw "<user><name>张三</name></user>" --prompt custom_prompt.txt -n 3
+atc llm-gen --xml "<user><name>张三</name></user>" --prompt custom_prompt.txt -n 3
 
 # 结合配置文件和提示词文件
-atc dify-gen -c my-config.toml --json --raw '{"name":"test"}' --prompt prompt.txt -n 5
+atc llm-gen -c my-config.toml --json '{"name":"test"}' --prompt prompt.txt -n 5
 
 # 显式指定API参数（覆盖配置文件）
-atc dify-gen -u https://api.dify.ai/v1 --api-key your_key --xml --raw "<test/>" -n 2
+atc llm-gen -u https://api.llm.ai/v1 --api-key your_key --xml "<test/>" -n 2
 ```
 
 ### 4. 一键生成并执行测试
@@ -147,12 +147,12 @@ atc local-gen '{"name":"test","age":25}' --json -n 3 -e \
   --request-url "https://httpbin.org/post" --request-json
 
 # AI生成并立即执行，带鉴权
-atc dify-gen --json --raw '{"user":"admin"}' -n 5 -e \
+atc llm-gen --json '{"user":"admin"}' -n 5 -e \
   --request-url "https://api.example.com/users" --request-json \
   --request-auth-bearer "your_token"
 
 # 使用约束系统生成并执行，保存结果
-atc local-gen '{"name":"张三","phone":"13800138000"}' --json --constraints -n 5 -e \
+atc local-gen '{"name":"张三","phone":"13800138000"}' --json -c config.toml -n 5 -e \
   --request-url "https://api.example.com/users" --request-json \
   --request-save --request-save-path "results.csv"
 ```
@@ -172,22 +172,20 @@ atc validate --verbose
 
 ## 📋 命令详解
 
-### `dify-gen` - AI智能生成测试用例
+### `llm-gen` - AI智能生成测试用例
 
-通过Dify Chatflow API生成智能测试用例。
+通过LLM API生成智能测试用例。
 
 ```bash
-atc dify-gen [flags]
+atc llm-gen [flags]
 ```
 
 **主要参数：**
-- `--url, -u`: Dify API URL（可选，可从配置文件读取）
-- `--api-key`: Dify API Key（可选，可从配置文件读取）
+- `--url, -u`: LLM API URL（可选，可从配置文件读取）
+- `--api-key`: LLM API Key（可选，可从配置文件读取）
 - `--config, -c`: 配置文件路径（默认：config.toml）
-- `--json`: 指定JSON格式
-- `--xml`: 指定XML格式
-- `--raw`: 直接输入原始数据
-- `--file, -f`: 从文件读取输入
+- `--json 'content'`: 指定JSON格式和内容
+- `--xml 'content'`: 指定XML格式和内容
 - `--prompt`: 自定义提示词文件路径（可选，文件必须是UTF-8编码）
 - `--num, -n`: 生成数量（默认5）
 - `--output, -o`: 输出文件路径
@@ -213,8 +211,8 @@ atc dify-gen [flags]
 
 创建 `config.toml` 文件：
 ```toml
-[dify]
-url = "https://api.dify.ai/v1/chatflows/xxx/run"
+[llm]
+url = "https://api.llm.ai/v1/chatflows/xxx/run"
 api_key = "app-xxxxxxxxxx"
 ```
 
@@ -226,23 +224,23 @@ api_key = "app-xxxxxxxxxx"
 **示例：**
 ```bash
 # 使用默认配置文件
-atc dify-gen --json --raw '{"name":"test"}' -n 3
+atc llm-gen --json '{"name":"test"}' -n 3
 
 # 指定配置文件
-atc dify-gen -c my-config.toml --xml --raw "<test/>" -n 5
+atc llm-gen -c my-config.toml --xml "<test/>" -n 5
 
 # 覆盖配置文件中的参数
-atc dify-gen --api-key new_key --json -f input.json -n 2
+atc llm-gen -c config.toml --api-key new_key --json '{"name":"test"}' -n 2
 
-# 从文件读取并启用调试
-atc dify-gen -f input.xml --xml -n 3 --debug
+# 覆盖正例报文并启用调试
+atc llm-gen -c config.toml --xml "<test/>" -n 3 --debug
 
 # 生成测试用例并立即执行
-atc dify-gen --json --raw '{"name":"test","age":25}' -n 3 -e \
+atc llm-gen --json '{"name":"test","age":25}' -n 3 -e \
   --request-url "https://httpbin.org/post" --request-json
 
 # 生成并执行，带鉴权和调试
-atc dify-gen --json --raw '{"user":"admin"}' -n 5 -e \
+atc llm-gen --json '{"user":"admin"}' -n 5 -e \
   --request-url "https://api.example.com/users" --request-json \
   --request-auth-bearer "your_token" --request-debug
 ```
@@ -259,10 +257,8 @@ atc local-gen [正例输入] [flags]
 - `--json`: 指定JSON格式
 - `--xml`: 指定XML格式
 - `--num, -n`: 生成数量（默认10）
-- `--file, -f`: 从文件读取正例
 - `--output, -o`: 输出文件路径
-- `--constraints`: 启用智能约束系统
-- `--constraints-file`: 指定约束配置文件
+- `--config, -c`: 指定配置文件路径（包含约束配置和其他设置）
 - `--exec, -e`: 生成测试用例后立即执行（需配合request相关参数使用）
 
 **执行相关参数（与--exec配合使用）：**
@@ -286,10 +282,10 @@ atc local-gen [正例输入] [flags]
 atc local-gen '{"name":"张三","age":25}' --json -n 10
 
 # 使用约束系统生成真实数据
-atc local-gen '{"name":"张三","phone":"13800138000"}' --json --constraints -n 5
+atc local-gen '{"name":"张三","phone":"13800138000"}' --json -c config.toml -n 5
 
-# 从文件生成并保存到指定位置
-atc local-gen -f input.json --json -n 20 -o testcases.csv
+# 覆盖配置文件中的正例报文并保存到指定位置
+atc local-gen -c config.toml --json '{"name":"test"}' -n 20 -o testcases.csv
 
 # 生成测试用例并立即执行
 atc local-gen '{"name":"test","age":25}' --json -n 3 -e \

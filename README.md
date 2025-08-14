@@ -17,7 +17,7 @@ ATC (API Test Command) is a powerful API automation testing command-line tool de
 - **Data Variation Rules**: 50% fluctuation for numbers, 10% length change for strings
 
 ### 🤖 AI-Powered Generation
-- **Dify API Integration**: Generate intelligent test cases through Dify Chatflow API
+- **LLM API Integration**: Generate intelligent test cases through LLM API
 - **Configuration File Support**: Read API settings from config.toml files
 - **Multiple Input Methods**: Support command-line input and file input
 - **Streaming Response**: Real-time generation progress display
@@ -80,38 +80,41 @@ bash build/build.sh
 
 ```bash
 # Use default configuration file to generate test cases
-atc dify-gen --xml --raw "<user><name>John</name></user>" -n 5
+atc llm-gen -c config.toml
 
 # Specify configuration file to generate test cases
-atc dify-gen -c my-config.toml --json --raw '{"name":"test"}' -n 3
+atc llm-gen -c my-config.toml -n 3
 
-# Read input from file and generate
-atc dify-gen --json -f input.json -n 5 --debug
+# Override positive message from config file with command line
+atc llm-gen -c config.toml --json '{"name":"test"}' --debug
 
 # Use custom prompt file to generate test cases
-atc dify-gen --xml --raw "<user><name>John</name></user>" --prompt custom_prompt.txt -n 3
+atc llm-gen -c config.toml --prompt custom_prompt.txt -n 3
 
 # Combine configuration file and prompt file
-atc dify-gen -c my-config.toml --json --raw '{"name":"test"}' --prompt prompt.txt -n 5
+atc llm-gen -c my-config.toml --prompt prompt.txt -n 5
 
 # Explicitly specify API parameters (override config file)
-atc dify-gen -u https://api.dify.ai/v1 --api-key your_key --xml --raw "<test/>" -n 2
+atc llm-gen -u https://api.llm.ai/v1 --api-key your_key --xml "<test/>" -n 2
 ```
 
 ### 2. Generate Test Cases Locally
 
 ```bash
 # Generate test cases from JSON positive example
-atc local-gen '{"name":"John","age":25,"email":"test@example.com"}' --json -n 10
+atc local-gen --json '{"name":"John","age":25,"email":"test@example.com"}' -n 10
 
 # Generate test cases from XML positive example
-atc local-gen '<user><name>John</name><age>25</age></user>' --xml -n 5
+atc local-gen --xml '<user><name>John</name><age>25</age></user>' -n 5
 
-# Read positive example from file and generate
-atc local-gen -f examples/json_example.json --json -n 20
+# Use configuration file with positive message and test case settings
+atc local-gen -c config.toml
+
+# Override positive message from config file with command line
+atc local-gen -c config.toml --json '{"name":"test"}' -n 20
 
 # Generate using smart constraint system
-atc local-gen -f examples/json_example.json --json -n 10 --constraints
+atc local-gen -c config.toml -n 10
 ```
 
 ### 3. Execute Interface Testing
@@ -148,22 +151,20 @@ atc validate --verbose
 
 ## 📋 Command Reference
 
-### `dify-gen` - AI-Powered Test Case Generation
+### `llm-gen` - AI-Powered Test Case Generation
 
-Generate intelligent test cases through Dify Chatflow API.
+Generate intelligent test cases through LLM API.
 
 ```bash
-atc dify-gen [flags]
+atc llm-gen [flags]
 ```
 
 **Main Parameters:**
-- `--url, -u`: Dify API URL (optional, can be read from config file)
-- `--api-key`: Dify API Key (optional, can be read from config file)
+- `--url, -u`: LLM API URL (optional, can be read from config file)
+- `--api-key`: LLM API Key (optional, can be read from config file)
 - `--config, -c`: Configuration file path (default: config.toml)
-- `--json`: Specify JSON format
-- `--xml`: Specify XML format
-- `--raw`: Direct raw data input
-- `--file, -f`: Read input from file
+- `--json 'content'`: Specify JSON format and content
+- `--xml 'content'`: Specify XML format and content
 - `--prompt`: Custom prompt file path (optional, file must be UTF-8 encoded)
 - `--num, -n`: Generation count (default 5)
 - `--output, -o`: Output file path
@@ -173,9 +174,23 @@ atc dify-gen [flags]
 
 Create a `config.toml` file:
 ```toml
-[dify]
-url = "https://api.dify.ai/v1/chatflows/xxx/run"
+[llm]
+url = "https://api.llm.ai/v1/chatflows/xxx/run"
 api_key = "app-xxxxxxxxxx"
+
+[testcase]
+num = 10
+output = "test_cases.csv"
+type = "json"
+positive_example = '''
+{
+  "user": {
+    "name": "John",
+    "age": 25,
+    "email": "john@example.com"
+  }
+}
+'''
 ```
 
 **Parameter Priority:**
@@ -186,16 +201,16 @@ api_key = "app-xxxxxxxxxx"
 **Examples:**
 ```bash
 # Use default configuration file
-atc dify-gen --json --raw '{"name":"test"}' -n 3
+atc llm-gen -c config.toml
 
 # Specify configuration file
-atc dify-gen -c my-config.toml --xml --raw "<test/>" -n 5
+atc llm-gen -c my-config.toml -n 5
 
 # Override config file parameters
-atc dify-gen --api-key new_key --json -f input.json -n 2
+atc llm-gen -c config.toml --api-key new_key --json '{"name":"test"}' -n 2
 
-# Read from file and enable debug
-atc dify-gen -f input.xml --xml -n 3 --debug
+# Override positive message and enable debug
+atc llm-gen -c config.toml --xml "<test/>" -n 3 --debug
 ```
 
 ### `local-gen` - Local Test Case Generation
@@ -210,21 +225,19 @@ atc local-gen [positive_example] [flags]
 - `--json`: Specify JSON format
 - `--xml`: Specify XML format
 - `--num, -n`: Generation count (default 10)
-- `--file, -f`: Read positive example from file
 - `--output, -o`: Output file path
-- `--constraints`: Enable smart constraint system
-- `--constraints-file`: Specify constraint configuration file
+- `--config, -c`: Specify configuration file path (contains constraint configuration and other settings)
 
 **Examples:**
 ```bash
 # Generate 10 JSON test cases
-atc local-gen '{"name":"John","age":25}' --json -n 10
+atc local-gen --json '{"name":"John","age":25}' -n 10
 
 # Use constraint system to generate realistic data
-atc local-gen '{"name":"张三","phone":"13800138000"}' --json --constraints -n 5
+atc local-gen -c config.toml -n 5
 
-# Generate from file and save to specified location
-atc local-gen -f input.json --json -n 20 -o testcases.csv
+# Override positive message from config file
+atc local-gen -c config.toml --json '{"name":"张三","phone":"13800138000"}' -n 20 -o testcases.csv
 ```
 
 ### `request` - Batch Interface Testing
@@ -315,7 +328,7 @@ The smart constraint system is ATC's core feature, capable of automatically iden
 
 ### Configuration File Example
 
-Create a `constraints.toml` file:
+Create a `config.toml` file:
 
 ```toml
 # Date field constraint
@@ -434,7 +447,7 @@ The system automatically adjusts concurrency based on the number of test cases, 
 
 The `examples/` directory contains complete usage examples:
 
-- `constraints.toml`: Constraint configuration example
+- `config.toml`: Configuration file example (includes constraint configuration)
 - `json_example.json`: JSON positive example input
 - `xml_example.xml`: XML positive example input
 - `input.xml`: Complex XML structure example

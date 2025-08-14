@@ -197,3 +197,15 @@ func ReadPromptFile(filePath string) (string, error) {
 
 	return promptContent, nil
 }
+
+// IsXMLFile 根据文件扩展名判断是否为XML文件
+func IsXMLFile(filePath string) bool {
+	ext := strings.ToLower(filepath.Ext(filePath))
+	return ext == ".xml"
+}
+
+// IsJSONFile 根据文件扩展名判断是否为JSON文件
+func IsJSONFile(filePath string) bool {
+	ext := strings.ToLower(filepath.Ext(filePath))
+	return ext == ".json"
+}
