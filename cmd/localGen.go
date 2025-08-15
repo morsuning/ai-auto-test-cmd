@@ -45,6 +45,9 @@ var localGenCmd = &cobra.Command{
 
 		// 从配置文件读取参数（如果指定了配置文件）
 		var config *utils.Config
+		if configFile == "" {
+			configFile = "config.toml"
+		}
 		if configFile != "" {
 			var err error
 			config, err = utils.LoadConfig(configFile)
