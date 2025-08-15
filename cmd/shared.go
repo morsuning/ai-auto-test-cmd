@@ -224,7 +224,7 @@ func buildHTTPRequestsWithAuth(testCases []models.TestCase, url, method string, 
 						headers["Content-Type"] = "application/xml"
 					}
 				}
-			} 
+			}
 			if useJSON {
 				// JSON格式（默认）
 				if jsonContent, exists := testCase.Data["_json_content"]; exists {
