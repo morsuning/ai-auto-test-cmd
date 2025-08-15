@@ -402,25 +402,57 @@ func LoadConstraintConfig(filePath string) error {
 		Constraints: make(map[string]FieldConstraint),
 	}
 
-	// 手动解析约束字段
-	for key, value := range rawConfig {
-		if key == "builtin_data" {
-			// 解析内置数据
-			builtinBytes, _ := toml.Marshal(map[string]any{"builtin_data": value})
-			var temp struct {
-				BuiltinData BuiltinData `toml:"builtin_data"`
+	// 检查是否有constraints节点
+	if constraintsNode, exists := rawConfig["constraints"]; exists {
+		// 新格式：constraints节点下的配置
+		if constraintsMap, ok := constraintsNode.(map[string]any); ok {
+			for key, value := range constraintsMap {
+				if key == "enable" {
+					// 跳过enable开关，这里不处理
+					continue
+				} else if key == "builtin_data" {
+					// 解析内置数据
+					builtinBytes, _ := toml.Marshal(map[string]any{"builtin_data": value})
+					var temp struct {
+						BuiltinData BuiltinData `toml:"builtin_data"`
+					}
+					toml.Unmarshal(builtinBytes, &temp)
+					config.BuiltinData = temp.BuiltinData
+				} else {
+					// 解析字段约束
+					constraintBytes, _ := toml.Marshal(map[string]any{key: value})
+					var constraint FieldConstraint
+					var temp map[string]FieldConstraint
+					if toml.Unmarshal(constraintBytes, &temp) == nil {
+						if c, exists := temp[key]; exists {
+							constraint = c
+							config.Constraints[key] = constraint
+						}
+					}
+				}
 			}
-			toml.Unmarshal(builtinBytes, &temp)
-			config.BuiltinData = temp.BuiltinData
-		} else {
-			// 解析字段约束
-			constraintBytes, _ := toml.Marshal(map[string]any{key: value})
-			var constraint FieldConstraint
-			var temp map[string]FieldConstraint
-			if toml.Unmarshal(constraintBytes, &temp) == nil {
-				if c, exists := temp[key]; exists {
-					constraint = c
-					config.Constraints[key] = constraint
+		}
+	} else {
+		// 旧格式：直接在根节点下的配置（向后兼容）
+		for key, value := range rawConfig {
+			if key == "builtin_data" {
+				// 解析内置数据
+				builtinBytes, _ := toml.Marshal(map[string]any{"builtin_data": value})
+				var temp struct {
+					BuiltinData BuiltinData `toml:"builtin_data"`
+				}
+				toml.Unmarshal(builtinBytes, &temp)
+				config.BuiltinData = temp.BuiltinData
+			} else {
+				// 解析字段约束
+				constraintBytes, _ := toml.Marshal(map[string]any{key: value})
+				var constraint FieldConstraint
+				var temp map[string]FieldConstraint
+				if toml.Unmarshal(constraintBytes, &temp) == nil {
+					if c, exists := temp[key]; exists {
+						constraint = c
+						config.Constraints[key] = constraint
+					}
 				}
 			}
 		}

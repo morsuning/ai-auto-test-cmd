@@ -17,6 +17,7 @@ var validateCmd = &cobra.Command{
 
 该命令会检查配置文件中的：
 - LLM API配置是否正确
+- 约束系统开关设置是否有效
 - 约束类型是否有效
 - 日期格式和范围是否正确
 - 数值范围是否合理
@@ -109,37 +110,51 @@ func showConfigStats(config *utils.Config) {
 		fmt.Println("    - 自定义提示词: 未配置")
 	}
 
+	// 显示约束系统配置
+	fmt.Println("  • 约束系统配置:")
+	constraintsEnabled := utils.IsConstraintsEnabled(config)
+	if constraintsEnabled {
+		fmt.Println("    - 状态: 已启用 ✅")
+	} else {
+		fmt.Println("    - 状态: 已禁用 ❌")
+	}
+
 	// 统计约束字段数量
-	constraintCount := len(config.Constraints)
+	constraintCount := len(config.Constraints.Constraints)
 	constraintTypes := make(map[string]int)
 
-	for _, constraint := range config.Constraints {
+	for _, constraint := range config.Constraints.Constraints {
 		constraintTypes[constraint.Type]++
 	}
 
-	fmt.Printf("  • 约束字段总数: %d\n", constraintCount)
+	fmt.Printf("    - 约束字段总数: %d\n", constraintCount)
 	if constraintCount > 0 {
-		fmt.Println("  • 约束类型分布:")
+		fmt.Println("    - 约束类型分布:")
 		for constraintType, count := range constraintTypes {
-			fmt.Printf("    - %s: %d 个\n", constraintType, count)
+			fmt.Printf("      • %s: %d 个\n", constraintType, count)
 		}
 	}
 
-	// 统计内置数据
-	if len(config.BuiltinData.FirstNames) > 0 || len(config.BuiltinData.LastNames) > 0 ||
-		len(config.BuiltinData.Addresses) > 0 || len(config.BuiltinData.EmailDomains) > 0 {
+	// 统计内置数据（优先使用constraints节点下的，向后兼容根节点下的）
+	builtinData := config.Constraints.BuiltinData
+	if len(builtinData.FirstNames) == 0 && len(config.BuiltinData.FirstNames) > 0 {
+		builtinData = config.BuiltinData
+	}
+
+	if len(builtinData.FirstNames) > 0 || len(builtinData.LastNames) > 0 ||
+		len(builtinData.Addresses) > 0 || len(builtinData.EmailDomains) > 0 {
 		fmt.Println("  • 内置数据集:")
-		if len(config.BuiltinData.FirstNames) > 0 {
-			fmt.Printf("    - 姓氏: %d 个\n", len(config.BuiltinData.FirstNames))
+		if len(builtinData.FirstNames) > 0 {
+			fmt.Printf("    - 姓氏: %d 个\n", len(builtinData.FirstNames))
 		}
-		if len(config.BuiltinData.LastNames) > 0 {
-			fmt.Printf("    - 名字: %d 个\n", len(config.BuiltinData.LastNames))
+		if len(builtinData.LastNames) > 0 {
+			fmt.Printf("    - 名字: %d 个\n", len(builtinData.LastNames))
 		}
-		if len(config.BuiltinData.Addresses) > 0 {
-			fmt.Printf("    - 地址: %d 个\n", len(config.BuiltinData.Addresses))
+		if len(builtinData.Addresses) > 0 {
+			fmt.Printf("    - 地址: %d 个\n", len(builtinData.Addresses))
 		}
-		if len(config.BuiltinData.EmailDomains) > 0 {
-			fmt.Printf("    - 邮箱域名: %d 个\n", len(config.BuiltinData.EmailDomains))
+		if len(builtinData.EmailDomains) > 0 {
+			fmt.Printf("    - 邮箱域名: %d 个\n", len(builtinData.EmailDomains))
 		}
 	}
 

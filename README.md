@@ -313,11 +313,24 @@ atc validate --verbose
 
 The smart constraint system is ATC's core feature, capable of automatically identifying field names and generating realistic and valid test data.
 
+### Constraint System Switch
+
+The constraint system supports flexible on/off control through configuration files:
+
+- **Switch Configuration**: `[constraints].enable`
+  
+- **Switch Behavior**:
+  - `true`: Enable constraint system, use smart constraint mode to generate test data
+  - `false`: Disable constraint system, use random variation mode to generate test data
+  - Not set: Automatically decide based on whether constraint configuration exists (enable if constraint configuration exists, otherwise disable)
+
 ### Supported Constraint Types
 
 | Constraint Type | Description | Example Field Names | Generation Example |
 |----------------|-------------|--------------------|-----------------|
+| `keep_original` | Keep original value | Any field | (unchanged) |
 | `date` | Date type | date, time, created_at | 20230101 |
+| `datetime` | DateTime type | datetime, create_datetime | 2024-11-22T15:00:26.431Z |
 | `chinese_name` | Chinese name | name, username, author | 周桂兰 |
 | `phone` | Phone number | phone, mobile, tel | 17234495798 |
 | `email` | Email address | email, mail | test473@189.cn |
@@ -331,8 +344,18 @@ The smart constraint system is ATC's core feature, capable of automatically iden
 Create a `config.toml` file:
 
 ```toml
+[testcase]
+# Test case settings
+num = 10
+output = "test_cases.csv"
+
+# Constraint system configuration
+[constraints]
+# Constraint system switch (true: enable, false: disable)
+enable = true
+
 # Date field constraint
-[date]
+[constraints.date]
 type = "date"
 format = "20060102"  # Go time format
 min_date = "20200101"
@@ -340,19 +363,19 @@ max_date = "20301231"
 description = "Date field, format YYYYMMDD"
 
 # Name field constraint
-[name]
+[constraints.name]
 type = "chinese_name"
 description = "Chinese name"
 
 # Age field constraint
-[age]
+[constraints.age]
 type = "integer"
 min = 1
 max = 120
 description = "Age range 1-120"
 
 # Price field constraint
-[price]
+[constraints.price]
 type = "float"
 min = 0.01
 max = 999999.99
@@ -360,7 +383,7 @@ precision = 2
 description = "Price field, 2 decimal places"
 
 # Built-in datasets
-[builtin_data]
+[constraints.builtin_data]
 first_names = ["张", "王", "李", "赵", "刘"]
 last_names = ["伟", "芳", "娜", "敏", "静"]
 addresses = ["北京市朝阳区建国门外大街1号", "上海市浦东新区陆家嘴环路1000号"]

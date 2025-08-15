@@ -16,20 +16,28 @@ var localGenCmd = &cobra.Command{
 	Short: "本地生成测试用例",
 	Long: `本地生成测试用例，根据正向用例自动生成随机测试数据。
 
+支持两种生成模式：
+1. 随机变化模式：对原始数据进行随机变化（默认模式）
+2. 智能约束模式：根据字段名应用相应的约束规则，生成更真实的测试数据
+
+约束系统开关：
+- 可通过配置文件中的 constraints.enable 控制
+- 如果未明确设置，有约束配置时默认启用
+
 示例：
-  # 本地根据正例xml报文生成10条测试用例
+  # 本地根据正例xml报文生成10条测试用例（随机变化模式）
   atc local-gen --xml "<root><name>test</name></root>" -n 10
 
-  # 本地根据正例json报文生成15条测试用例
+  # 本地根据正例json报文生成15条测试用例（随机变化模式）
   atc local-gen --json '{"name":"test","age":25}' -n 15
 
-  # 使用配置文件中的正例报文和用例设置生成测试用例
-  atc local-gen -c config.toml
+  # 使用默认配置文件(config.toml)中的参数和正例报文
+  atc local-gen
 
   # 命令行参数覆盖配置文件中的正例报文
   atc local-gen -c config.toml --json '{"name":"test"}'
 
-  # 使用配置文件中的约束配置和用例设置生成智能测试用例
+  # 使用配置文件中的约束配置生成智能测试用例（需要在配置文件中启用约束系统）
   atc local-gen -c config.toml -n 20
 
   # 生成测试用例并立即执行（从配置文件读取request参数）
@@ -188,12 +196,19 @@ var localGenCmd = &cobra.Command{
 				return
 			}
 
-			// 检查是否包含约束配置
-			if len(config.Constraints) > 0 || len(config.BuiltinData.FirstNames) > 0 {
-				useConstraints = true
-				fmt.Println("✅ 约束配置加载成功，启用智能约束模式")
+			// 检查约束系统是否启用
+			useConstraints = utils.IsConstraintsEnabled(config)
+
+			if useConstraints {
+				// 检查是否有约束配置
+				if len(config.Constraints.Constraints) > 0 || len(config.Constraints.BuiltinData.FirstNames) > 0 || len(config.BuiltinData.FirstNames) > 0 {
+					fmt.Println("✅ 约束系统已启用，智能约束模式生效")
+				} else {
+					fmt.Println("⚠️  约束系统已启用，但未找到约束配置，将使用随机变化模式")
+					useConstraints = false
+				}
 			} else {
-				fmt.Println("📋 配置文件中未包含约束配置，使用随机变化模式")
+				fmt.Println("📋 约束系统已禁用，使用随机变化模式")
 			}
 		}
 

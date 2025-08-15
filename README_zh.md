@@ -370,11 +370,24 @@ atc validate --verbose
 
 智能约束系统是ATC的核心特性，能够根据字段名自动识别并生成真实有效的测试数据。
 
+### 约束系统开关
+
+约束系统支持通过配置文件进行灵活的开关控制：
+
+- **开关配置**：`[constraints].enable`
+  
+- **开关行为**：
+  - `true`：启用约束系统，使用智能约束模式生成测试数据
+  - `false`：禁用约束系统，使用随机变化模式生成测试数据
+  - 未设置：根据是否存在约束配置自动决定（有约束配置则启用，否则禁用）
+
 ### 支持的约束类型
 
 | 约束类型 | 说明 | 示例字段名 | 生成示例 |
 |---------|------|-----------|----------|
+| `keep_original` | 保持原值 | 任意字段 | （不变） |
 | `date` | 日期类型 | date, time, created_at | 20230101 |
+| `datetime` | 日期时间类型 | datetime, create_datetime | 2024-11-22T15:00:26.431Z |
 | `chinese_name` | 中文姓名 | name, username, author | 周桂兰 |
 | `phone` | 手机号码 | phone, mobile, tel | 17234495798 |
 | `email` | 邮箱地址 | email, mail | test473@189.cn |
@@ -385,11 +398,21 @@ atc validate --verbose
 
 ### 配置文件示例
 
-创建 `constraints.toml` 文件：
+创建 `config.toml` 文件：
 
 ```toml
+[testcase]
+# 用例设置
+num = 10
+output = "test_cases.csv"
+
+# 约束系统配置
+[constraints]
+# 约束系统开关（true: 启用，false: 禁用）
+enable = true
+
 # 日期字段约束
-[date]
+[constraints.date]
 type = "date"
 format = "20060102"  # Go时间格式
 min_date = "20200101"
@@ -397,19 +420,19 @@ max_date = "20301231"
 description = "日期字段，格式为YYYYMMDD"
 
 # 姓名字段约束
-[name]
+[constraints.name]
 type = "chinese_name"
 description = "中文姓名"
 
 # 年龄字段约束
-[age]
+[constraints.age]
 type = "integer"
 min = 1
 max = 120
 description = "年龄范围1-120"
 
 # 价格字段约束
-[price]
+[constraints.price]
 type = "float"
 min = 0.01
 max = 999999.99
@@ -417,7 +440,7 @@ precision = 2
 description = "价格字段，保留2位小数"
 
 # 内置数据集
-[builtin_data]
+[constraints.builtin_data]
 first_names = ["张", "王", "李", "赵", "刘"]
 last_names = ["伟", "芳", "娜", "敏", "静"]
 addresses = ["北京市朝阳区建国门外大街1号", "上海市浦东新区陆家嘴环路1000号"]

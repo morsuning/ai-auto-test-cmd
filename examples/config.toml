@@ -1,50 +1,5 @@
 # API自动化测试命令行工具配置文件
-# 包含LLM API配置、请求配置、公共配置、约束配置和内置数据
-
-[llm]
-# LLM API Base URL
-url = "http://localhost/v1"
-
-# LLM API Key
-api_key = "app-uS9lBUYnv2Flm6mOylxhggy7"
-
-# 自定义提示词（可选）
-user_prompt = "请生成边界情况的测试用例，包括空值、极值、特殊字符等场景"
-
-[request]
-# 目标URL
-url = "https://httpbin.org/post"
-
-# 请求方法
-method = "post"
-
-# CSV测试用例文件路径
-file = "test_cases.csv"
-
-# 结果保存路径
-save_path = "results.csv"
-
-# 请求超时时间（秒）
-timeout = 30
-
-# 并发请求数
-concurrent = 3
-
-# Bearer Token认证
-auth_bearer = "your_bearer_token_here"
-
-# Basic Auth认证（格式：username:password）
-auth_basic = "username:password"
-
-# API Key认证
-auth_api_key = "your_api_key_here"
-
-# 自定义HTTP头（数组格式）
-headers = [
-    "X-API-Version: v1",
-    "X-Client-ID: atc-tool",
-    "X-Request-Source: automated-test"
-]
+# 包含用例配置、LLM配置、请求配置、约束配置和内置数据集
 
 [testcase]
 # 用例生成数量
@@ -95,20 +50,66 @@ positive_example = '''
 # </request>
 # '''
 
-# 约束配置 - 保持原值不变的字段约束
+[llm]
+# LLM API Base URL
+url = "http://localhost/v1"
+
+# LLM API Key
+api_key = "app-uS9lBUxxxxxxxxlxhggy7"
+
+# 自定义提示词（可选）
+user_prompt = "请生成边界情况的测试用例，包括空值、极值、特殊字符等场景"
+
+[request]
+# 目标URL
+url = "https://httpbin.org/post"
+
+# 请求方法
+method = "post"
+
+# CSV测试用例文件路径
+file = "test_cases.csv"
+
+# 结果保存路径
+save_path = "results.csv"
+
+# 请求超时时间（秒）
+timeout = 30
+
+# 并发请求数
+concurrent = 3
+
+# Bearer Token认证
+# auth_bearer = "your_bearer_token_here"
+
+# Basic Auth认证（格式：username:password）
+# auth_basic = "username:password"
+
+# API Key认证
+# auth_api_key = "your_api_key_here"
+
+# 自定义HTTP头（数组格式）
+# headers = [
+#     "X-API-Version: v1",
+#     "X-Client-ID: atc-tool",
+#     "X-Request-Source: automated-test"
+# ]
+
+# 约束系统配置
+[constraints]
+# 约束系统开关（true: 启用约束系统，false: 使用随机变化模式）
+enable = true
+
+# 保持原值不变的字段约束
 [constraints.Head]
 type = "keep_original"
 description = "保持Head节点及其所有子字段的原值不变"
 
-[constraints.SvcCd]
+[constraints.Head.service_code]
 type = "keep_original"
 description = "保持服务代码原值不变"
 
-[constraints.SvcScn]
-type = "keep_original"
-description = "保持服务场景原值不变"
-
-# 约束配置 - 日期字段约束
+# 日期字段约束
 [constraints.date]
 type = "date"
 format = "20060102"  # Go时间格式
@@ -128,7 +129,7 @@ format = "20060102"
 min_date = "20200101"
 max_date = "20301231"
 
-# 约束配置 - 日期时间字段约束（RFC 3339 Extended格式）
+# 日期时间字段约束（RFC 3339 Extended格式）
 [constraints.datetime]
 type = "datetime"
 min_datetime = "2020-01-01T00:00:00.000+00:00"
@@ -150,14 +151,14 @@ max_datetime = "2025-12-31T23:59:59.999Z"
 timezone = "Asia/Shanghai"
 description = "使用IANA时区的日期时间"
 
-[constraints.TxnDt]
+[constraints.transaction_datetime]
 type = "datetime"
 min_datetime = "2024-01-01T00:00:00.000+00:00"
 max_datetime = "2025-12-31T23:59:59.999+00:00"
 timezone = "UTC"
 description = "交易日期时间，RFC 3339 Extended格式"
 
-# 约束配置 - 姓名字段约束
+# 姓名字段约束
 [constraints.name]
 type = "chinese_name"
 description = "中文姓名"
@@ -171,14 +172,14 @@ type = "chinese_name"
 [constraints.real_name]
 type = "chinese_name"
 
-# 约束配置 - 年龄字段约束
+# 年龄字段约束
 [constraints.age]
 type = "integer"
 min = 1
 max = 120
 description = "年龄范围1-120"
 
-# 约束配置 - 手机号字段约束
+# 手机号字段约束
 [constraints.phone]
 type = "phone"
 description = "中国大陆手机号"
@@ -189,7 +190,7 @@ type = "phone"
 [constraints.phone_number]
 type = "phone"
 
-# 约束配置 - 邮箱字段约束
+# 邮箱字段约束
 [constraints.email]
 type = "email"
 description = "邮箱地址"
@@ -197,7 +198,7 @@ description = "邮箱地址"
 [constraints.email_address]
 type = "email"
 
-# 约束配置 - 价格字段约束
+# 价格字段约束
 [constraints.price]
 type = "float"
 min = 0.01
@@ -217,7 +218,7 @@ min = 0.01
 max = 999999.99
 precision = 2
 
-# 约束配置 - 地址字段约束
+# 地址字段约束
 [constraints.address]
 type = "chinese_address"
 description = "中文地址"
@@ -228,7 +229,7 @@ type = "chinese_address"
 [constraints.location]
 type = "chinese_address"
 
-# 约束配置 - 身份证号字段约束
+# 身份证号字段约束
 [constraints.id_card]
 type = "id_card"
 description = "中国身份证号"
@@ -239,7 +240,7 @@ type = "id_card"
 [constraints.card_no]
 type = "id_card"
 
-# 约束配置 - 数量字段约束
+# 数量字段约束
 [constraints.quantity]
 type = "integer"
 min = 1
@@ -256,14 +257,14 @@ type = "integer"
 min = 1
 max = 10000
 
-# 约束配置 - 状态字段约束
+# 状态字段约束
 [constraints.status]
 type = "integer"
 min = 0
 max = 9
 description = "状态码"
 
-# 约束配置 - 编号字段约束
+# 编号字段约束
 [constraints.id]
 type = "integer"
 min = 1

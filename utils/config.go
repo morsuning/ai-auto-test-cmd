@@ -37,13 +37,20 @@ type TestCaseConfig struct {
 	Type            string `toml:"type"`             // 正例报文类型（xml或json）
 }
 
+// ConstraintsConfig 约束系统配置
+type ConstraintsConfig struct {
+	Enable      *bool                      `toml:"enable"`       // 约束系统开关
+	BuiltinData BuiltinData                `toml:"builtin_data"` // 内置数据
+	Constraints map[string]FieldConstraint // 约束配置（手动解析）
+}
+
 // Config 应用配置结构
 type Config struct {
-	LLM         LLMConfig                  `toml:"llm"`          // LLM配置
-	Request     RequestConfig              `toml:"request"`      // 请求配置
-	TestCase    TestCaseConfig             `toml:"testcase"`     // 用例设置
-	Constraints map[string]FieldConstraint `toml:"constraints"`  // 约束配置
-	BuiltinData BuiltinData                `toml:"builtin_data"` // 内置数据
+	LLM         LLMConfig         `toml:"llm"`          // LLM配置
+	Request     RequestConfig     `toml:"request"`      // 请求配置
+	TestCase    TestCaseConfig    `toml:"testcase"`     // 用例设置
+	Constraints ConstraintsConfig `toml:"constraints"`  // 约束系统配置
+	BuiltinData BuiltinData       `toml:"builtin_data"` // 内置数据（向后兼容）
 }
 
 // LoadConfig 从指定文件加载配置
@@ -59,11 +66,41 @@ func LoadConfig(configFile string) (*Config, error) {
 		return nil, fmt.Errorf("读取配置文件失败: %w", err)
 	}
 
+	// 先解析为通用map以处理constraints节点
+	var rawConfig map[string]any
+	err = toml.Unmarshal(data, &rawConfig)
+	if err != nil {
+		return nil, fmt.Errorf("解析配置文件失败: %w", err)
+	}
+
 	// 解析TOML配置
 	var config Config
 	err = toml.Unmarshal(data, &config)
 	if err != nil {
 		return nil, fmt.Errorf("解析配置文件失败: %w", err)
+	}
+
+	// 手动解析constraints节点
+	if constraintsNode, exists := rawConfig["constraints"]; exists {
+		if constraintsMap, ok := constraintsNode.(map[string]any); ok {
+			config.Constraints.Constraints = make(map[string]FieldConstraint)
+
+			for key, value := range constraintsMap {
+				if key == "enable" || key == "builtin_data" {
+					// 跳过已经解析的字段
+					continue
+				}
+
+				// 解析字段约束
+				constraintBytes, _ := toml.Marshal(map[string]any{key: value})
+				var temp map[string]FieldConstraint
+				if toml.Unmarshal(constraintBytes, &temp) == nil {
+					if constraint, exists := temp[key]; exists {
+						config.Constraints.Constraints[key] = constraint
+					}
+				}
+			}
+		}
 	}
 
 	return &config, nil
@@ -76,11 +113,23 @@ func LoadConfigWithConstraints(configFile string) (*Config, error) {
 		return nil, err
 	}
 
-	// 如果配置文件中包含约束配置，设置全局约束配置
-	if len(config.Constraints) > 0 || len(config.BuiltinData.FirstNames) > 0 {
+	// 检查约束系统是否启用
+	constraintsEnabled := IsConstraintsEnabled(config)
+
+	// 如果约束系统启用且配置文件中包含约束配置，设置全局约束配置
+	if constraintsEnabled && (len(config.Constraints.Constraints) > 0 || len(config.Constraints.BuiltinData.FirstNames) > 0 || len(config.BuiltinData.FirstNames) > 0) {
+		// 合并约束配置（优先使用constraints节点下的配置，向后兼容builtin_data）
+		constraints := config.Constraints.Constraints
+		builtinData := config.Constraints.BuiltinData
+
+		// 向后兼容：如果constraints节点下没有builtin_data，使用根节点下的
+		if len(builtinData.FirstNames) == 0 && len(config.BuiltinData.FirstNames) > 0 {
+			builtinData = config.BuiltinData
+		}
+
 		constraintConfig := &ConstraintConfig{
-			Constraints: config.Constraints,
-			BuiltinData: config.BuiltinData,
+			Constraints: constraints,
+			BuiltinData: builtinData,
 		}
 
 		// 验证约束配置
@@ -90,9 +139,23 @@ func LoadConfigWithConstraints(configFile string) (*Config, error) {
 
 		// 设置全局约束配置
 		globalConstraintConfig = constraintConfig
+	} else {
+		// 约束系统未启用，清空全局约束配置
+		globalConstraintConfig = nil
 	}
 
 	return config, nil
+}
+
+// IsConstraintsEnabled 检查约束系统是否启用
+func IsConstraintsEnabled(config *Config) bool {
+	// 如果明确设置了constraints.enable，使用该设置
+	if config.Constraints.Enable != nil {
+		return *config.Constraints.Enable
+	}
+
+	// 默认值：如果有约束配置则启用，否则禁用
+	return len(config.Constraints.Constraints) > 0 || len(config.Constraints.BuiltinData.FirstNames) > 0 || len(config.BuiltinData.FirstNames) > 0
 }
 
 // LoadDefaultConfig 加载默认配置文件(config.toml)
