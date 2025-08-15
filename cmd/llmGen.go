@@ -150,15 +150,6 @@ var llmGenCmd = &cobra.Command{
 		// 如果使用exec参数，从配置文件读取request相关参数
 		var requestParams RequestParams
 		if exec {
-			if configFile == "" {
-				configFile = "config.toml"
-			}
-			config, err := utils.LoadConfig(configFile)
-			if err != nil {
-				fmt.Printf("❌ 加载配置文件失败: %v\n", err)
-				return
-			}
-
 			requestParams = RequestParams{
 				URL:           config.Request.URL,
 				Method:        config.Request.Method,

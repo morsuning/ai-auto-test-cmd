@@ -224,7 +224,8 @@ func buildHTTPRequestsWithAuth(testCases []models.TestCase, url, method string, 
 						headers["Content-Type"] = "application/xml"
 					}
 				}
-			} else {
+			} 
+			if useJSON {
 				// JSON格式（默认）
 				if jsonContent, exists := testCase.Data["_json_content"]; exists {
 					// 直接使用JSON内容
@@ -268,7 +269,6 @@ func buildHTTPRequestsWithAuth(testCases []models.TestCase, url, method string, 
 			// 其他请求方法
 			headers["Accept"] = "application/json"
 		}
-
 		requests[i] = utils.HTTPRequest{
 			URL:     url,
 			Method:  strings.ToUpper(method),
@@ -277,7 +277,6 @@ func buildHTTPRequestsWithAuth(testCases []models.TestCase, url, method string, 
 			Timeout: timeout,
 		}
 	}
-
 	return requests, nil
 }
 
@@ -326,7 +325,6 @@ func applyAuthConfig(headers map[string]string, authConfig AuthConfig) error {
 		}
 		headers[key] = value
 	}
-
 	return nil
 }
 
