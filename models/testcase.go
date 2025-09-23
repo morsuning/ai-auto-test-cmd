@@ -1,6 +1,4 @@
-/*
-Copyright © 2025 API自动化测试命令行工具
-*/
+// Package models 测试用例模型
 package models
 
 // TestCase 表示一个测试用例
