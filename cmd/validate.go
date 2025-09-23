@@ -142,7 +142,9 @@ func showConfigStats(config *utils.Config) {
 	}
 
 	if len(builtinData.FirstNames) > 0 || len(builtinData.LastNames) > 0 ||
-		len(builtinData.Addresses) > 0 || len(builtinData.EmailDomains) > 0 {
+		len(builtinData.Addresses) > 0 || len(builtinData.EmailDomains) > 0 ||
+		len(builtinData.BankCards) > 0 || len(builtinData.PhoneNumbers) > 0 ||
+		len(builtinData.IDCards) > 0 {
 		fmt.Println("  • 内置数据集:")
 		if len(builtinData.FirstNames) > 0 {
 			fmt.Printf("    - 姓氏: %d 个\n", len(builtinData.FirstNames))
@@ -155,6 +157,15 @@ func showConfigStats(config *utils.Config) {
 		}
 		if len(builtinData.EmailDomains) > 0 {
 			fmt.Printf("    - 邮箱域名: %d 个\n", len(builtinData.EmailDomains))
+		}
+		if len(builtinData.BankCards) > 0 {
+			fmt.Printf("    - 银行卡号: %d 个\n", len(builtinData.BankCards))
+		}
+		if len(builtinData.PhoneNumbers) > 0 {
+			fmt.Printf("    - 手机号: %d 个\n", len(builtinData.PhoneNumbers))
+		}
+		if len(builtinData.IDCards) > 0 {
+			fmt.Printf("    - 身份证号: %d 个\n", len(builtinData.IDCards))
 		}
 	}
 

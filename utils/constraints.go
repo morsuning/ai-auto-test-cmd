@@ -34,6 +34,9 @@ type BuiltinData struct {
 	LastNames    []string `toml:"last_names"`    // 名字
 	Addresses    []string `toml:"addresses"`     // 地址
 	EmailDomains []string `toml:"email_domains"` // 邮箱域名
+	BankCards    []string `toml:"bank_cards"`    // 银行卡号
+	PhoneNumbers []string `toml:"phone_numbers"` // 手机号
+	IDCards      []string `toml:"id_cards"`      // 身份证号
 }
 
 // ConstraintConfig 约束配置
@@ -102,7 +105,7 @@ func validateFieldConstraint(fieldName string, constraint FieldConstraint) []Val
 	var errors []ValidationError
 
 	// 验证约束类型
-	validTypes := []string{"date", "datetime", "chinese_name", "phone", "email", "chinese_address", "id_card", "integer", "float", "keep_original"}
+	validTypes := []string{"date", "datetime", "chinese_name", "phone", "email", "chinese_address", "id_card", "bank_card", "integer", "float", "keep_original"}
 	if constraint.Type == "" {
 		errors = append(errors, ValidationError{
 			Field:   fieldName,
@@ -381,6 +384,118 @@ func validateBuiltinData(data BuiltinData) []ValidationError {
 		}
 	}
 
+	// 验证银行卡号数据
+	if len(data.BankCards) == 0 {
+		errors = append(errors, ValidationError{
+			Field:   "builtin_data.bank_cards",
+			Message: "银行卡号列表不能为空",
+		})
+	} else {
+		for i, card := range data.BankCards {
+			cardTrimmed := strings.TrimSpace(card)
+			if cardTrimmed == "" {
+				errors = append(errors, ValidationError{
+					Field:   "builtin_data.bank_cards",
+					Message: fmt.Sprintf("第 %d 个银行卡号不能为空", i+1),
+				})
+			} else if len(cardTrimmed) < 15 || len(cardTrimmed) > 19 {
+				errors = append(errors, ValidationError{
+					Field:   "builtin_data.bank_cards",
+					Message: fmt.Sprintf("第 %d 个银行卡号 '%s' 长度无效，应为15-19位数字", i+1, cardTrimmed),
+				})
+			} else {
+				// 验证是否为纯数字
+				for _, char := range cardTrimmed {
+					if char < '0' || char > '9' {
+						errors = append(errors, ValidationError{
+							Field:   "builtin_data.bank_cards",
+							Message: fmt.Sprintf("第 %d 个银行卡号 '%s' 包含非数字字符", i+1, cardTrimmed),
+						})
+						break
+					}
+				}
+			}
+		}
+	}
+
+	// 验证手机号数据
+	if len(data.PhoneNumbers) == 0 {
+		errors = append(errors, ValidationError{
+			Field:   "builtin_data.phone_numbers",
+			Message: "手机号列表不能为空",
+		})
+	} else {
+		for i, phone := range data.PhoneNumbers {
+			phoneTrimmed := strings.TrimSpace(phone)
+			if phoneTrimmed == "" {
+				errors = append(errors, ValidationError{
+					Field:   "builtin_data.phone_numbers",
+					Message: fmt.Sprintf("第 %d 个手机号不能为空", i+1),
+				})
+			} else if len(phoneTrimmed) != 11 {
+				errors = append(errors, ValidationError{
+					Field:   "builtin_data.phone_numbers",
+					Message: fmt.Sprintf("第 %d 个手机号 '%s' 长度无效，应为11位数字", i+1, phoneTrimmed),
+				})
+			} else {
+				// 验证是否为纯数字
+				for _, char := range phoneTrimmed {
+					if char < '0' || char > '9' {
+						errors = append(errors, ValidationError{
+							Field:   "builtin_data.phone_numbers",
+							Message: fmt.Sprintf("第 %d 个手机号 '%s' 包含非数字字符", i+1, phoneTrimmed),
+						})
+						break
+					}
+				}
+			}
+		}
+	}
+
+	// 验证身份证号数据
+	if len(data.IDCards) == 0 {
+		errors = append(errors, ValidationError{
+			Field:   "builtin_data.id_cards",
+			Message: "身份证号列表不能为空",
+		})
+	} else {
+		for i, idCard := range data.IDCards {
+			idCardTrimmed := strings.TrimSpace(idCard)
+			if idCardTrimmed == "" {
+				errors = append(errors, ValidationError{
+					Field:   "builtin_data.id_cards",
+					Message: fmt.Sprintf("第 %d 个身份证号不能为空", i+1),
+				})
+			} else if len(idCardTrimmed) != 18 {
+				errors = append(errors, ValidationError{
+					Field:   "builtin_data.id_cards",
+					Message: fmt.Sprintf("第 %d 个身份证号 '%s' 长度无效，应为18位", i+1, idCardTrimmed),
+				})
+			} else {
+				// 验证前17位是否为数字，最后一位可以是数字或X
+				for j, char := range idCardTrimmed {
+					if j < 17 {
+						if char < '0' || char > '9' {
+							errors = append(errors, ValidationError{
+								Field:   "builtin_data.id_cards",
+								Message: fmt.Sprintf("第 %d 个身份证号 '%s' 前17位必须为数字", i+1, idCardTrimmed),
+							})
+							break
+						}
+					} else {
+						if char != 'X' && (char < '0' || char > '9') {
+							errors = append(errors, ValidationError{
+								Field:   "builtin_data.id_cards",
+								Message: fmt.Sprintf("第 %d 个身份证号 '%s' 最后一位必须为数字或X", i+1, idCardTrimmed),
+							})
+							break
+						}
+					}
+				}
+			}
+		}
+	}
+
 	return errors
 }
 
@@ -536,6 +651,8 @@ func GenerateConstrainedValue(constraint *FieldConstraint, originalValue any) an
 		return generateChineseAddress()
 	case "id_card":
 		return generateIDCard()
+	case "bank_card":
+		return generateBankCard()
 	case "integer":
 		return generateIntegerValue(constraint)
 	case "float":
@@ -857,13 +974,23 @@ func generateChineseName() string {
 
 // generatePhoneNumber 生成手机号
 func generatePhoneNumber() string {
-	// 中国大陆手机号格式：1[3-9]xxxxxxxxx
-	prefixes := []string{"13", "14", "15", "16", "17", "18", "19"}
-	prefix := prefixes[rand.Intn(len(prefixes))]
+	// 默认手机号数据集
+	defaultPhoneNumbers := []string{
+		"13800138000", "13900139000", "15000150000", "15100151000", "15200152000",
+		"15300153000", "15500155000", "15600156000", "15700157000", "15800158000",
+		"15900159000", "17000170000", "17100171000", "17200172000", "17300173000",
+		"17500175000", "17600176000", "17700177000", "17800178000", "17900179000",
+		"18000180000", "18100181000", "18200182000", "18300183000", "18500185000",
+		"18600186000", "18700187000", "18800188000", "18900189000", "19000190000",
+	}
 
-	// 生成后9位数字
-	suffix := fmt.Sprintf("%09d", rand.Intn(1000000000))
-	return prefix + suffix
+	phoneNumbers := defaultPhoneNumbers
+	if globalConstraintConfig != nil && len(globalConstraintConfig.BuiltinData.PhoneNumbers) > 0 {
+		phoneNumbers = globalConstraintConfig.BuiltinData.PhoneNumbers
+	}
+
+	// 随机选择一个手机号
+	return phoneNumbers[rand.Intn(len(phoneNumbers))]
 }
 
 // generateEmail 生成邮箱地址
@@ -902,24 +1029,25 @@ func generateChineseAddress() string {
 
 // generateIDCard 生成身份证号
 func generateIDCard() string {
-	// 简化的身份证号生成（前6位地区码 + 8位生日 + 3位顺序码 + 1位校验码）
-	areaCodes := []string{"110101", "310101", "440101", "500101", "510101"}
-	areaCode := areaCodes[rand.Intn(len(areaCodes))]
+	// 默认身份证号数据集
+	defaultIDCards := []string{
+		"110101199001011234", "110101199002021235", "110101199003031236", "110101199004041237", "110101199005051238",
+		"310101199101011239", "310101199102021240", "310101199103031241", "310101199104041242", "310101199105051243",
+		"440101199201011244", "440101199202021245", "440101199203031246", "440101199204041247", "440101199205051248",
+		"500101199301011249", "500101199302021250", "500101199303031251", "500101199304041252", "500101199305051253",
+		"510101199401011254", "510101199402021255", "510101199403031256", "510101199404041257", "510101199405051258",
+		"320101199501011259", "320101199502021260", "320101199503031261", "320101199504041262", "320101199505051263",
+		"330101199601011264", "330101199602021265", "330101199603031266", "330101199604041267", "330101199605051268",
+		"420101199701011269", "420101199702021270", "420101199703031271", "420101199704041272", "420101199705051273",
+	}
 
-	// 生成生日（1980-2005年）
-	year := 1980 + rand.Intn(26)
-	month := 1 + rand.Intn(12)
-	day := 1 + rand.Intn(28)
-	birthday := fmt.Sprintf("%04d%02d%02d", year, month, day)
+	idCards := defaultIDCards
+	if globalConstraintConfig != nil && len(globalConstraintConfig.BuiltinData.IDCards) > 0 {
+		idCards = globalConstraintConfig.BuiltinData.IDCards
+	}
 
-	// 生成顺序码
-	sequence := fmt.Sprintf("%03d", rand.Intn(1000))
-
-	// 简单的校验码（随机生成）
-	checkCodes := []string{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "X"}
-	checkCode := checkCodes[rand.Intn(len(checkCodes))]
-
-	return areaCode + birthday + sequence + checkCode
+	// 随机选择一个身份证号
+	return idCards[rand.Intn(len(idCards))]
 }
 
 // generateIntegerValue 生成整数值
@@ -990,6 +1118,36 @@ func applyFloatPrecision(value float64, precision int) float64 {
 
 	// 四舍五入到指定精度
 	return float64(int(value*multiplier+0.5)) / multiplier
+}
+
+// generateBankCard 生成银行卡号
+func generateBankCard() string {
+	// 默认银行卡号数据集
+	defaultBankCards := []string{
+		"6222021234567890", // 工商银行
+		"6227001234567896", // 建设银行
+		"6228481234567893", // 农业银行
+		"6217851234567899", // 中国银行
+		"6225881234567892", // 交通银行
+		"6221551234567897", // 招商银行
+		"6222601234567891", // 兴业银行
+		"6225211234567898", // 浦发银行
+		"6225811234567895", // 邮储银行
+		"6217771234567894", // 广发银行
+		"6226661234567890", // 民生银行
+		"6223181234567896", // 平安银行
+		"6223231234567893", // 中信银行
+		"6226001234567899", // 华夏银行
+		"6222621234567892", // 光大银行
+	}
+
+	bankCards := defaultBankCards
+	if globalConstraintConfig != nil && len(globalConstraintConfig.BuiltinData.BankCards) > 0 {
+		bankCards = globalConstraintConfig.BuiltinData.BankCards
+	}
+
+	// 随机选择一个银行卡号
+	return bankCards[rand.Intn(len(bankCards))]
 }
 
 // init 初始化随机数种子

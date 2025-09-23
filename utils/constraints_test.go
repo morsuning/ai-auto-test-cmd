@@ -220,3 +220,46 @@ func BenchmarkIsValidIANATimezoneFormat(b *testing.B) {
 		}
 	}
 }
+
+// TestGenerateBankCard 测试银行卡号生成功能
+func TestGenerateBankCard(t *testing.T) {
+	// 创建银行卡约束
+	constraint := &FieldConstraint{
+		Type: "bank_card",
+	}
+
+	// 测试多次生成，确保格式正确
+	for i := 0; i < 10; i++ {
+		result := GenerateConstrainedValue(constraint, "")
+		cardNumber, ok := result.(string)
+		if !ok {
+			t.Errorf("生成的银行卡号不是字符串类型: %T", result)
+			continue
+		}
+
+		// 验证长度（银行卡号通常为15-19位）
+		if len(cardNumber) < 15 || len(cardNumber) > 19 {
+			t.Errorf("银行卡号长度错误: 期望15-19位，实际%d位，卡号: %s", len(cardNumber), cardNumber)
+		}
+
+		// 验证是否为纯数字
+		for _, char := range cardNumber {
+			if char < '0' || char > '9' {
+				t.Errorf("银行卡号包含非数字字符: %s", cardNumber)
+			}
+		}
+	}
+}
+
+// TestBankCardConstraintValidation 测试银行卡约束验证
+func TestBankCardConstraintValidation(t *testing.T) {
+	// 测试有效的银行卡约束
+	constraint := FieldConstraint{
+		Type: "bank_card",
+	}
+
+	errors := validateFieldConstraint("test_bank_card", constraint)
+	if len(errors) != 0 {
+		t.Errorf("有效的银行卡约束验证失败: %v", errors)
+	}
+}

@@ -1,16 +1,45 @@
 {
-  "name": "张三",
-  "age": 30,
-  "email": "zhangsan@example.com",
-  "phone": "13800138000",
-  "address": {
-    "city": "北京",
-    "street": "朝阳区建国路88号",
-    "postcode": "100022"
+  "user": {
+    "name": "张三",
+    "real_name": "张三丰",
+    "age": 30,
+    "phone": "13800138000",
+    "mobile": "15912345678",
+    "email": "zhangsan@example.com",
+    "email_address": "zhangsan.work@company.com",
+    "address": "北京市朝阳区建国门外大街1号",
+    "location": "上海市浦东新区陆家嘴环路1000号",
+    "id_card": "110101199001011234",
+    "identity_card": "310101199101011239",
+    "bank_card": "6222021234567890",
+    "card_number": "6227001234567896"
   },
-  "tags": ["开发", "测试", "运维"],
-  "scores": [85, 92, 78],
-  "active": true,
-  "salary": 15000.50,
-  "hire_date": "2020-05-15"
+  "order": {
+    "id": 12345,
+    "order_id": 67890,
+    "user_id": 98765,
+    "amount": 199.99,
+    "price": 299.50,
+    "money": 399.00,
+    "quantity": 2,
+    "qty": 5,
+    "count": 10,
+    "status": 1,
+    "create_date": "20240101",
+    "update_date": "20240115",
+    "date": "20240201",
+    "create_datetime": "2024-01-01T10:30:00.000+08:00",
+    "update_datetime": "2024-01-15T15:45:30.000+08:00",
+    "transaction_datetime": "2024-02-01T09:20:15.000Z"
+  },
+  "system": {
+    "datetime": "2024-01-01T10:30:00.000Z",
+    "active": true,
+    "tags": ["开发", "测试", "运维"],
+    "scores": [85, 92, 78],
+    "metadata": {
+      "version": "1.0.0",
+      "build": "20240101"
+    }
+  }
 }
