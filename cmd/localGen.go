@@ -251,6 +251,16 @@ var localGenCmd = &cobra.Command{
 			csvData = utils.ConvertToJSONRows(testCases)
 		}
 
+		// 在命令行输出生成的测试用例
+		if len(csvData) > 0 {
+			for i, row := range csvData {
+				if i == 0 {
+					continue
+				}
+				fmt.Printf("🧪 测试用例 %d: %s\n", i, row[0])
+			}
+		}
+
 		// 保存到文件
 		err = utils.SaveToCSV(csvData, output)
 		if err != nil {
