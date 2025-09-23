@@ -28,6 +28,7 @@ type RequestParams struct {
 	AuthBasic     string   // Basic Auth认证
 	AuthAPIKey    string   // API Key认证
 	CustomHeaders []string // 自定义HTTP头
+	QueryParams   []string // URL查询参数
 	IsXML         bool     // 使用XML格式
 	IsJSON        bool     // 使用JSON格式
 }
@@ -48,10 +49,7 @@ func validateRequestParams(params RequestParams) error {
 		return fmt.Errorf("不能同时指定 --xml 和 --json 参数，请只选择一种格式")
 	}
 
-	// 验证GET请求的格式约束
-	if strings.ToUpper(params.Method) == "GET" && params.IsXML {
-		return fmt.Errorf("GET请求只支持JSON格式，请使用 --json 参数")
-	}
+	// GET请求现在支持JSON和XML格式，不再有格式限制
 
 	return nil
 }
@@ -84,7 +82,7 @@ func executeGeneratedTestCases(outputFile string, params RequestParams) error {
 	}
 
 	// 执行批量请求
-	if err := executeBatchRequestsWithAuth(params.URL, params.Method, outputFile, params.Save, params.SavePath, params.Timeout, params.Concurrent, contentType, params.Debug, authConfig); err != nil {
+	if err := executeBatchRequestsWithAuth(params.URL, params.Method, outputFile, params.Save, params.SavePath, params.Timeout, params.Concurrent, contentType, params.Debug, authConfig, params.QueryParams); err != nil {
 		return fmt.Errorf("执行测试用例失败: %v", err)
 	}
 
@@ -121,7 +119,7 @@ func executeTestCasesDirectly(testCases []models.TestCase, params RequestParams)
 	// 构建HTTP请求
 	useJSON := strings.ToLower(contentType) == "json"
 	useXML := strings.ToLower(contentType) == "xml"
-	requests, err := buildHTTPRequestsWithAuth(testCases, params.URL, params.Method, params.Timeout, useJSON, useXML, authConfig)
+	requests, err := buildHTTPRequestsWithAuth(testCases, params.URL, params.Method, params.Timeout, useJSON, useXML, authConfig, params.QueryParams)
 	if err != nil {
 		return fmt.Errorf("构建HTTP请求失败: %v", err)
 	}
@@ -184,7 +182,7 @@ type AuthConfig struct {
 }
 
 // buildHTTPRequestsWithAuth 构建HTTP请求列表（支持鉴权）
-func buildHTTPRequestsWithAuth(testCases []models.TestCase, url, method string, timeout int, useJSON, useXML bool, authConfig AuthConfig) ([]utils.HTTPRequest, error) {
+func buildHTTPRequestsWithAuth(testCases []models.TestCase, url, method string, timeout int, useJSON, useXML bool, authConfig AuthConfig, queryParams []string) ([]utils.HTTPRequest, error) {
 	// 检查并添加默认协议
 	if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
 		url = "http://" + url
@@ -239,38 +237,59 @@ func buildHTTPRequestsWithAuth(testCases []models.TestCase, url, method string, 
 				}
 			}
 		} else if strings.ToUpper(method) == "GET" {
-			// GET请求，将JSON数据转换为查询参数
-			var queryParams []string
-			if jsonContent, exists := testCase.Data["_json_content"]; exists {
-				// 解析JSON内容为查询参数
-				var jsonData map[string]any
-				if err := json.Unmarshal([]byte(fmt.Sprintf("%v", jsonContent)), &jsonData); err == nil {
-					for key, value := range jsonData {
-						queryParams = append(queryParams, fmt.Sprintf("%s=%v", key, value))
+			// GET请求现在支持在body中放置JSON/XML数据
+			if useXML {
+				// XML格式
+				if xmlContent, exists := testCase.Data["_xml_content"]; exists {
+					// 直接使用XML内容
+					body = fmt.Sprintf("%v", xmlContent)
+					headers["Content-Type"] = "application/xml"
+				} else {
+					// 从字段数据转换为XML
+					xmlData, err := convertToXML(testCase.Data)
+					if err != nil {
+						// 如果转换失败，回退到JSON
+						jsonData, _ := json.Marshal(testCase.Data)
+						body = string(jsonData)
+						headers["Content-Type"] = "application/json"
+					} else {
+						body = xmlData
+						headers["Content-Type"] = "application/xml"
 					}
 				}
-			} else {
-				// 从字段数据构建查询参数
-				for key, value := range testCase.Data {
-					queryParams = append(queryParams, fmt.Sprintf("%s=%v", key, value))
+			}
+			if useJSON {
+				// JSON格式
+				if jsonContent, exists := testCase.Data["_json_content"]; exists {
+					// 直接使用JSON内容
+					body = fmt.Sprintf("%v", jsonContent)
+					headers["Content-Type"] = "application/json"
+				} else {
+					// 从字段数据转换为JSON
+					jsonData, _ := json.Marshal(testCase.Data)
+					body = string(jsonData)
+					headers["Content-Type"] = "application/json"
 				}
 			}
 
-			// 将查询参数添加到URL
-			if len(queryParams) > 0 {
-				separator := "?"
-				if strings.Contains(url, "?") {
-					separator = "&"
-				}
-				requests[i].URL = url + separator + strings.Join(queryParams, "&")
-			}
+			// 查询参数将在最后统一处理
 			headers["Accept"] = "application/json"
 		} else {
 			// 其他请求方法
 			headers["Accept"] = "application/json"
 		}
+		// 构建最终URL（包含查询参数）
+		finalURL := url
+		if len(queryParams) > 0 {
+			separator := "?"
+			if strings.Contains(url, "?") {
+				separator = "&"
+			}
+			finalURL = url + separator + strings.Join(queryParams, "&")
+		}
+
 		requests[i] = utils.HTTPRequest{
-			URL:     url,
+			URL:     finalURL,
 			Method:  strings.ToUpper(method),
 			Headers: headers,
 			Body:    body,

@@ -63,15 +63,19 @@ Download the pre-compiled version suitable for your system from the [Releases](h
 git clone https://github.com/morsuning/ai-auto-test-cmd.git
 cd ai-auto-test-cmd
 
-# Compile
+# Quick local build (for development)
 go build -o atc
 
-# Or use build scripts
-# Windows
-build\build.bat
+# Or use build scripts with version injection
+# Local build with version
+./build/build-local.sh v1.0.0
 
-# macOS/Linux
-bash build/build.sh
+# Cross-platform build with version
+./build/build.sh v1.0.0
+
+# Check version after build
+./atc --version
+./atc version
 ```
 
 ## 🚀 Quick Start

@@ -2,10 +2,25 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
 )
+
+// 版本信息变量
+var (
+	appVersion   = "dev"
+	appBuildTime = "unknown"
+	appGitCommit = "unknown"
+)
+
+// SetVersionInfo 设置版本信息
+func SetVersionInfo(version, buildTime, gitCommit string) {
+	appVersion = version
+	appBuildTime = buildTime
+	appGitCommit = gitCommit
+}
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -18,9 +33,25 @@ var rootCmd = &cobra.Command{
 3. 批量执行测试请求并保存结果
 
 使用'atc [command] --help'获取更多信息。`,
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
-	// Run: func(cmd *cobra.Command, args []string) { },
+	Run: func(cmd *cobra.Command, args []string) {
+		// 检查是否使用了--version标志
+		if versionFlag, _ := cmd.Flags().GetBool("version"); versionFlag {
+			fmt.Printf("API自动化测试命令行工具 (atc) %s\n", appVersion)
+			if appVersion != "dev" {
+				if appBuildTime != "unknown" {
+					fmt.Printf("构建时间: %s\n", appBuildTime)
+				}
+				if appGitCommit != "unknown" {
+					fmt.Printf("Git提交: %s\n", appGitCommit)
+				}
+			} else {
+				fmt.Println("开发版本 - 使用构建脚本设置版本号")
+			}
+			return
+		}
+		// 如果没有指定子命令，显示帮助信息
+		cmd.Help()
+	},
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -33,11 +64,12 @@ func Execute() {
 }
 
 func init() {
+
+	// 添加--version标志到根命令
+	rootCmd.Flags().BoolP("version", "v", false, "显示版本信息")
+
 	// 这里定义全局标志和配置设置
 	// Cobra支持持久性标志，如果在此处定义，将对应用程序全局有效
 
 	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.ai-auto-test-cmd.yaml)")
-
-	// 注意：子命令已在各自的init函数中添加到根命令
-	// genCmd, localGenCmd, requestCmd已在各自的文件中通过init函数添加
 }

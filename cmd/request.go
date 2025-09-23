@@ -36,6 +36,9 @@ var requestCmd = &cobra.Command{
   # 根据测试用例文件xxx.csv,批量使用GET方法请求目标系统http接口，结果默认保存至当前目录
   atc request -u https://xxx.system.com/xxx/xxx -m get -f xxx.csv --json -s
 
+  # GET请求支持在body中放置JSON/XML数据，同时可以添加URL查询参数
+  atc request -u https://xxx.system.com/xxx/xxx -m get -f xxx.csv --json --query "version=v1" --query "debug=true"
+
   # 启用调试模式，详细输出每个请求的URL、HTTP头和请求体信息，以及响应详情
   atc request -u https://xxx.system.com/xxx/xxx -m post -f xxx.csv --json --debug
 
@@ -61,7 +64,14 @@ var requestCmd = &cobra.Command{
   atc request -u https://xxx.system.com/xxx/xxx -m post -f xxx.csv --json --header "X-API-Key: your_api_key" --header "X-Client-Version: 1.0"
 
   # 组合使用鉴权和自定义头
-  atc request -u https://xxx.system.com/xxx/xxx -m post -f xxx.csv --json --auth-bearer "token" --header "X-Request-ID: 12345"`,
+  atc request -u https://xxx.system.com/xxx/xxx -m post -f xxx.csv --json --auth-bearer "token" --header "X-Request-ID: 12345"
+
+URL查询参数示例：
+  # 添加URL查询参数（适用于任何请求方法）
+  atc request -u https://xxx.system.com/xxx/xxx -m get -f xxx.csv --json --query "version=v1" --query "debug=true"
+
+  # 组合使用查询参数、鉴权和自定义头
+  atc request -u https://xxx.system.com/xxx/xxx -m post -f xxx.csv --json --query "api_version=2.0" --auth-bearer "token" --header "X-Request-ID: 12345"`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// 获取配置文件参数
 		configFile, _ := cmd.Flags().GetString("config")
@@ -86,6 +96,9 @@ var requestCmd = &cobra.Command{
 		isXML, _ := cmd.Flags().GetBool("xml")
 		isJSON, _ := cmd.Flags().GetBool("json")
 
+		// 获取查询参数
+		queryParams, _ := cmd.Flags().GetStringSlice("query")
+
 		// 从配置文件读取参数（如果指定了配置文件）
 		if configFile != "" {
 			config, err := utils.LoadConfig(configFile)
@@ -107,7 +120,7 @@ var requestCmd = &cobra.Command{
 			if savePath == "" && config.Request.SavePath != "" {
 				savePath = config.Request.SavePath
 			}
-			if timeout == 30 && config.Request.Timeout != 0 { // 只有当timeout是默认值时才从配置文件读取
+			if timeout == 5 && config.Request.Timeout != 0 { // 只有当timeout是默认值时才从配置文件读取
 				timeout = config.Request.Timeout
 			}
 			if concurrent == 3 && config.Request.Concurrent != 0 { // 只有当concurrent是默认值时才从配置文件读取
@@ -124,6 +137,9 @@ var requestCmd = &cobra.Command{
 			}
 			if len(customHeaders) == 0 && len(config.Request.Headers) > 0 {
 				customHeaders = config.Request.Headers
+			}
+			if len(queryParams) == 0 && len(config.Request.Query) > 0 {
+				queryParams = config.Request.Query
 			}
 		}
 
@@ -145,12 +161,6 @@ var requestCmd = &cobra.Command{
 
 		if isXML && isJSON {
 			fmt.Println("❌ 错误: 不能同时指定 --xml 和 --json 参数，请只选择一种格式")
-			os.Exit(1)
-		}
-
-		// 验证GET请求的格式约束
-		if strings.ToUpper(method) == "GET" && isXML {
-			fmt.Println("❌ 错误: GET请求只支持JSON格式，请使用 --json 参数")
 			os.Exit(1)
 		}
 
@@ -179,7 +189,7 @@ var requestCmd = &cobra.Command{
 		}
 
 		// 执行批量请求
-		if err := executeBatchRequestsWithAuth(url, method, filePath, save, savePath, timeout, concurrent, contentType, debug, authConfig); err != nil {
+		if err := executeBatchRequestsWithAuth(url, method, filePath, save, savePath, timeout, concurrent, contentType, debug, authConfig, queryParams); err != nil {
 			fmt.Printf("❌ 执行失败: %v\n", err)
 			os.Exit(1)
 		}
@@ -217,6 +227,9 @@ func init() {
 	// 自定义HTTP头参数组
 	requestCmd.Flags().StringSlice("header", []string{}, "自定义HTTP头，格式：\"Key: Value\"，可多次使用（可选，可从配置文件读取）")
 
+	// 查询参数组
+	requestCmd.Flags().StringSliceP("query", "q", []string{}, "URL查询参数，格式：\"key=value\"，可多次使用（可选，可从配置文件读取）")
+
 	// 调试参数组
 	requestCmd.Flags().Bool("debug", false, "启用调试模式，输出详细的请求信息")
 
@@ -225,7 +238,7 @@ func init() {
 }
 
 // executeBatchRequestsWithAuth 执行批量请求（支持鉴权）
-func executeBatchRequestsWithAuth(url, method, filePath string, save bool, savePath string, timeout, concurrent int, contentType string, debug bool, authConfig AuthConfig) error {
+func executeBatchRequestsWithAuth(url, method, filePath string, save bool, savePath string, timeout, concurrent int, contentType string, debug bool, authConfig AuthConfig, queryParams []string) error {
 	// 读取CSV文件
 	fmt.Println("📖 正在读取测试用例文件...")
 	data, err := utils.ReadCSV(filePath)
@@ -248,7 +261,7 @@ func executeBatchRequestsWithAuth(url, method, filePath string, save bool, saveP
 	// 构建HTTP请求
 	useJSON := strings.ToLower(contentType) == "json"
 	useXML := strings.ToLower(contentType) == "xml"
-	requests, err := buildHTTPRequestsWithAuth(testCases, url, method, timeout, useJSON, useXML, authConfig)
+	requests, err := buildHTTPRequestsWithAuth(testCases, url, method, timeout, useJSON, useXML, authConfig, queryParams)
 	if err != nil {
 		return err
 	}

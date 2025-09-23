@@ -27,6 +27,7 @@ type RequestConfig struct {
 	AuthBasic  string   `toml:"auth_basic"`   // Basic Auth认证
 	AuthAPIKey string   `toml:"auth_api_key"` // API Key认证
 	Headers    []string `toml:"headers"`      // 自定义HTTP头
+	Query      []string `toml:"query"`        // GET请求的URL查询参数
 }
 
 // TestCaseConfig 用例设置

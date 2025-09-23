@@ -76,7 +76,7 @@ url = "http://localhost/v1"
 api_key = "app-uS9lBUxxxxxxxxlxhggy7"
 
 # 自定义提示词（可选）
-user_prompt = "请生成边界情况的测试用例，包括空值、极值、特殊字符等场景"
+# user_prompt = "请生成边界情况的测试用例，包括空值、极值、特殊字符等场景"
 
 [request]
 # 目标URL
@@ -85,6 +85,13 @@ url = "https://httpbin.org/post"
 # 请求方法
 method = "post"
 
+# URL查询参数（数组格式），可输入多组
+# query = [
+#     "version=v1",
+#     "source=atc-tool",
+#     "debug=true"
+# ]
+
 # CSV测试用例文件路径
 file = "test_cases.csv"
 
@@ -92,7 +99,7 @@ file = "test_cases.csv"
 save_path = "results.csv"
 
 # 请求超时时间（秒）
-timeout = 30
+timeout = 5
 
 # 并发请求数
 concurrent = 3

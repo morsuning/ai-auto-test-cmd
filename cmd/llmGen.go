@@ -161,6 +161,7 @@ var llmGenCmd = &cobra.Command{
 				AuthBasic:     config.Request.AuthBasic,
 				AuthAPIKey:    config.Request.AuthAPIKey,
 				CustomHeaders: config.Request.Headers,
+				QueryParams:   config.Request.Query,
 				IsXML:         isXML,
 				IsJSON:        isJSON,
 			}

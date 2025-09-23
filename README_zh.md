@@ -69,15 +69,20 @@ ATC (API Test Command) 是一个功能强大的API自动化测试命令行工具
 git clone https://github.com/morsuning/ai-auto-test-cmd.git
 cd ai-auto-test-cmd
 
-# 编译
+# 快速本地构建（用于开发）
 go build -o atc
 
-# 或使用构建脚本
-# Windows
-build\build.bat
+# 或使用带版本注入的构建脚本
 
-# macOS/Linux
-bash build/build.sh
+# 跨平台构建（带版本信息）
+./build/build.sh v1.0.0
+
+# Windows用户
+build\build.bat v1.0.0
+
+# 构建完成后查看版本信息
+./atc --version
+./atc version
 ```
 
 ## 🚀 快速开始
