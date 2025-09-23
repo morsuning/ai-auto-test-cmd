@@ -184,7 +184,7 @@ var localGenCmd = &cobra.Command{
 		fmt.Println("🔧 本地生成测试用例")
 		fmt.Printf("📝 报文格式: %s\n", getFormatName(isXML, isJSON))
 		fmt.Printf("📄 原始报文: %s\n", inputContent)
-		fmt.Printf("🔢 生成入数量: %d\n", num)
+		fmt.Printf("🔢 生成数量: %d\n", num)
 		fmt.Printf("💾 输出文件: %s\n", output)
 
 		// 加载配置文件（包含约束配置）
