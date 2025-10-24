@@ -20,6 +20,11 @@ var localGenCmd = &cobra.Command{
 1. 随机变化模式：对原始数据进行随机变化（默认模式）
 2. 智能约束模式：根据字段名应用相应的约束规则，生成更真实的测试数据
 
+随机化因子配置：
+- 可通过配置文件中的 testcase.variation_rate 设置随机化程度（0.0-1.0）
+- 默认值为 0.5（50%变化程度）
+- 值越大，生成的数据变化越大；值越小，生成的数据越接近原始数据
+
 约束系统开关：
 - 可通过配置文件中的 constraints.enable 控制
 - 如果未明确设置，有约束配置时默认启用
@@ -37,7 +42,7 @@ var localGenCmd = &cobra.Command{
   # 命令行参数覆盖配置文件中的正例报文
   atc local-gen -c config.toml --json '{"name":"test"}'
 
-  # 使用配置文件中的约束配置生成智能测试用例（需要在配置文件中启用约束系统）
+  # 使用配置文件中的约束配置和自定义随机化因子生成智能测试用例
   atc local-gen -c config.toml -n 20
 
   # 生成测试用例并立即执行（从配置文件读取request参数）
@@ -51,18 +56,16 @@ var localGenCmd = &cobra.Command{
 		configFile, _ := cmd.Flags().GetString("config")
 		exec, _ := cmd.Flags().GetBool("exec")
 
-		// 从配置文件读取参数（如果指定了配置文件）
+		// 加载配置文件
 		var config *utils.Config
-		if configFile == "" {
-			configFile = "config.toml"
-		}
 		if configFile != "" {
 			var err error
-			config, err = utils.LoadConfig(configFile)
+			config, err = utils.LoadConfigWithConstraints(configFile)
 			if err != nil {
 				fmt.Printf("❌ 加载配置文件失败: %v\n", err)
 				return
 			}
+			fmt.Printf("📄 加载配置文件: %s\n", configFile)
 
 			// 从配置文件补充缺失的参数
 			if num == 10 && config.TestCase.Num != 0 { // 只有当num是默认值时才从配置文件读取
@@ -130,22 +133,17 @@ var localGenCmd = &cobra.Command{
 			}
 		}
 
-		// 如果使用exec参数，从配置文件读取request相关参数
+		// 如果使用exec参数，从已加载的配置文件读取request相关参数
 		var requestParams RequestParams
 		if exec {
-			if configFile == "" {
-				configFile = "config.toml"
-			}
-			config, err := utils.LoadConfig(configFile)
-			if err != nil {
-				fmt.Printf("❌ 加载配置文件失败: %v\n", err)
+			if config == nil {
+				fmt.Println("❌ 错误: 使用 --exec 参数时必须指定配置文件")
 				return
 			}
 
 			requestParams = RequestParams{
 				URL:           config.Request.URL,
 				Method:        config.Request.Method,
-				Save:          config.Request.SavePath != "",
 				SavePath:      config.Request.SavePath,
 				Timeout:       config.Request.Timeout,
 				Concurrent:    config.Request.Concurrent,
@@ -156,6 +154,7 @@ var localGenCmd = &cobra.Command{
 				QueryParams:   config.Request.Query,
 				IsXML:         isXML,
 				IsJSON:        isJSON,
+				IgnoreTLS:     config.Request.IgnoreTLSErrors,
 			}
 
 			// 设置默认值
@@ -187,17 +186,9 @@ var localGenCmd = &cobra.Command{
 		fmt.Printf("🔢 生成数量: %d\n", num)
 		fmt.Printf("💾 输出文件: %s\n", output)
 
-		// 加载配置文件（包含约束配置）
+		// 检查约束系统是否启用
 		var useConstraints bool
-		if configFile != "" {
-			fmt.Printf("📄 加载配置文件: %s\n", configFile)
-			config, err := utils.LoadConfigWithConstraints(configFile)
-			if err != nil {
-				fmt.Printf("❌ 加载配置文件失败: %v\n", err)
-				return
-			}
-
-			// 检查约束系统是否启用
+		if config != nil {
 			useConstraints = utils.IsConstraintsEnabled(config)
 
 			if useConstraints {
@@ -236,10 +227,20 @@ var localGenCmd = &cobra.Command{
 		// 生成测试用例
 		fmt.Println("🔄 正在生成测试用例...")
 		var testCases []map[string]any
-		if useConstraints {
-			testCases = utils.GenerateTestCasesWithConstraints(data, num, true)
+
+		// 获取随机化因子，优先使用配置文件中的设置，否则使用默认值0.5
+		variationRate := 0.5
+		if config != nil && config.TestCase.VariationRate > 0 {
+			variationRate = config.TestCase.VariationRate
+			fmt.Printf("🎲 使用配置的随机化因子: %.2f\n", variationRate)
 		} else {
-			testCases = utils.GenerateTestCases(data, num)
+			fmt.Printf("🎲 使用默认随机化因子: %.2f\n", variationRate)
+		}
+
+		if useConstraints {
+			testCases = utils.GenerateTestCasesWithVariationRate(data, num, variationRate, true)
+		} else {
+			testCases = utils.GenerateTestCasesWithVariationRate(data, num, variationRate, false)
 		}
 
 		// 根据格式转换数据

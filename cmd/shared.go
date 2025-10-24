@@ -19,7 +19,6 @@ import (
 type RequestParams struct {
 	URL           string   // 目标URL
 	Method        string   // 请求方法
-	Save          bool     // 是否保存结果
 	SavePath      string   // 结果保存路径
 	Timeout       int      // 请求超时时间
 	Concurrent    int      // 并发请求数
@@ -31,6 +30,7 @@ type RequestParams struct {
 	QueryParams   []string // URL查询参数
 	IsXML         bool     // 使用XML格式
 	IsJSON        bool     // 使用JSON格式
+	IgnoreTLS     bool     // 忽略TLS证书验证
 }
 
 // validateRequestParams 验证request参数
@@ -82,7 +82,7 @@ func executeGeneratedTestCases(outputFile string, params RequestParams) error {
 	}
 
 	// 执行批量请求
-	if err := executeBatchRequestsWithAuth(params.URL, params.Method, outputFile, params.Save, params.SavePath, params.Timeout, params.Concurrent, contentType, params.Debug, authConfig, params.QueryParams); err != nil {
+	if err := executeBatchRequestsWithAuth(params.URL, params.Method, outputFile, params.SavePath, params.Timeout, params.Concurrent, contentType, params.Debug, authConfig, params.QueryParams, params.IgnoreTLS); err != nil {
 		return fmt.Errorf("执行测试用例失败: %v", err)
 	}
 
@@ -119,7 +119,7 @@ func executeTestCasesDirectly(testCases []models.TestCase, params RequestParams)
 	// 构建HTTP请求
 	useJSON := strings.ToLower(contentType) == "json"
 	useXML := strings.ToLower(contentType) == "xml"
-	requests, err := buildHTTPRequestsWithAuth(testCases, params.URL, params.Method, params.Timeout, useJSON, useXML, authConfig, params.QueryParams)
+	requests, err := buildHTTPRequestsWithAuth(testCases, params.URL, params.Method, params.Timeout, useJSON, useXML, authConfig, params.QueryParams, params.IgnoreTLS)
 	if err != nil {
 		return fmt.Errorf("构建HTTP请求失败: %v", err)
 	}
@@ -142,14 +142,8 @@ func executeTestCasesDirectly(testCases []models.TestCase, params RequestParams)
 	displayResults(results, duration, params.Debug)
 
 	// 保存结果（如果需要）
-	if params.Save {
-		savePath := params.SavePath
-		if savePath == "" {
-			savePath = "result.csv"
-		}
-		if err := saveResults(results, savePath); err != nil {
-			return fmt.Errorf("保存结果失败: %v", err)
-		}
+	if err := saveResults(results, params.SavePath); err != nil {
+		return fmt.Errorf("保存结果失败: %v", err)
 	}
 
 	return nil
@@ -182,7 +176,7 @@ type AuthConfig struct {
 }
 
 // buildHTTPRequestsWithAuth 构建HTTP请求列表（支持鉴权）
-func buildHTTPRequestsWithAuth(testCases []models.TestCase, url, method string, timeout int, useJSON, useXML bool, authConfig AuthConfig, queryParams []string) ([]utils.HTTPRequest, error) {
+func buildHTTPRequestsWithAuth(testCases []models.TestCase, url, method string, timeout int, useJSON, useXML bool, authConfig AuthConfig, queryParams []string, ignoreTLS bool) ([]utils.HTTPRequest, error) {
 	// 检查并添加默认协议
 	if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
 		url = "http://" + url
@@ -289,11 +283,12 @@ func buildHTTPRequestsWithAuth(testCases []models.TestCase, url, method string, 
 		}
 
 		requests[i] = utils.HTTPRequest{
-			URL:     finalURL,
-			Method:  strings.ToUpper(method),
-			Headers: headers,
-			Body:    body,
-			Timeout: timeout,
+			URL:       finalURL,
+			Method:    strings.ToUpper(method),
+			Body:      body,
+			Headers:   headers,
+			Timeout:   timeout,
+			IgnoreTLS: ignoreTLS,
 		}
 	}
 	return requests, nil

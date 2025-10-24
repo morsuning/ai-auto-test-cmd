@@ -24,54 +24,58 @@ var requestCmd = &cobra.Command{
 例如：localhost:8080/user 将被处理为 http://localhost:8080/user
 
 基本示例：
-  # 根据测试用例文件xxx.csv,批量使用POST方法请求目标系统http接口，发送JSON格式数据
-  atc request -u https://xxx.system.com/xxx/xxx -m post -f xxx.csv --json
+  # 自动检测格式并发送请求（CSV第一行为'json'）
+  atc request -u https://xxx.system.com/xxx/xxx -m post -f xxx.csv
 
   # 使用本地服务器（自动添加http://协议）
-  atc request -u localhost:8080/api/test -m post -f xxx.csv --json
+  atc request -u localhost:8080/api/test -m post -f xxx.csv
 
   # 根据测试用例文件xxx.csv,批量使用POST方法请求目标系统http接口，发送XML格式数据
   atc request -u https://xxx.system.com/xxx/xxx -m post -f xxx.csv --xml
 
-  # 根据测试用例文件xxx.csv,批量使用GET方法请求目标系统http接口，结果默认保存至当前目录
-  atc request -u https://xxx.system.com/xxx/xxx -m get -f xxx.csv --json -s
+  # GET请求，自动检测格式，结果自动保存至当前目录
+  atc request -u https://xxx.system.com/xxx/xxx -m get -f xxx.csv
 
   # GET请求支持在body中放置JSON/XML数据，同时可以添加URL查询参数
-  atc request -u https://xxx.system.com/xxx/xxx -m get -f xxx.csv --json --query "version=v1" --query "debug=true"
+  atc request -u https://xxx.system.com/xxx/xxx -m get -f xxx.csv --query "version=v1" --query "debug=true"
 
   # 启用调试模式，详细输出每个请求的URL、HTTP头和请求体信息，以及响应详情
-  atc request -u https://xxx.system.com/xxx/xxx -m post -f xxx.csv --json --debug
+  atc request -u https://xxx.system.com/xxx/xxx -m post -f xxx.csv --debug
 
 配置文件示例：
   # 使用配置文件中的参数
-  atc request -c config.toml --json
+  atc request -c config.toml
 
   # 使用配置文件，命令行参数覆盖配置文件中的设置
-  atc request -c config.toml -u https://api.example.com/test --json
+  atc request -c config.toml -u https://api.example.com/test
 
 鉴权示例：
   # 使用Bearer Token鉴权发送请求
-  atc request -u https://xxx.system.com/xxx/xxx -m post -f xxx.csv --json --auth-bearer "your_token_here"
+  atc request -u https://xxx.system.com/xxx/xxx -m post -f xxx.csv --auth-bearer "your_token_here"
 
   # 使用Basic Auth鉴权发送请求
-  atc request -u https://xxx.system.com/xxx/xxx -m post -f xxx.csv --json --auth-basic "username:password"
+  atc request -u https://xxx.system.com/xxx/xxx -m post -f xxx.csv --auth-basic "username:password"
 
   # 使用API Key鉴权发送请求
-  atc request -u https://xxx.system.com/xxx/xxx -m post -f xxx.csv --json --auth-api-key "your_api_key"
+  atc request -u https://xxx.system.com/xxx/xxx -m post -f xxx.csv --auth-api-key "your_api_key"
+
+  # 使用HTTPS时忽略TLS证书验证错误（适用于自签名证书或测试环境）
+  atc request -u https://self-signed.example.com/api -m post -f xxx.csv --ignore-tls
 
 自定义HTTP头示例：
-  # 添加自定义HTTP头发送请求
-  atc request -u https://xxx.system.com/xxx/xxx -m post -f xxx.csv --json --header "X-API-Key: your_api_key" --header "X-Client-Version: 1.0"
+  # 添加自定义HTTP头发送请求（格式自动检测）
+  atc request -u https://xxx.system.com/xxx/xxx -m post -f xxx.csv --header "X-API-Key: your_api_key" --header "X-Client-Version: 1.0"
 
   # 组合使用鉴权和自定义头
-  atc request -u https://xxx.system.com/xxx/xxx -m post -f xxx.csv --json --auth-bearer "token" --header "X-Request-ID: 12345"
+  atc request -u https://xxx.system.com/xxx/xxx -m post -f xxx.csv --auth-bearer "token" --header "X-Request-ID: 12345"
 
 URL查询参数示例：
   # 添加URL查询参数（适用于任何请求方法）
-  atc request -u https://xxx.system.com/xxx/xxx -m get -f xxx.csv --json --query "version=v1" --query "debug=true"
+  atc request -u https://xxx.system.com/xxx/xxx -m get -f xxx.csv --query "version=v1" --query "debug=true"
 
   # 组合使用查询参数、鉴权和自定义头
-  atc request -u https://xxx.system.com/xxx/xxx -m post -f xxx.csv --json --query "api_version=2.0" --auth-bearer "token" --header "X-Request-ID: 12345"`,
+  atc request -u https://xxx.system.com/xxx/xxx -m post -f xxx.csv --query "api_version=2.0" --auth-bearer "token" --header "X-Request-ID: 12345"
+`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// 获取配置文件参数
 		configFile, _ := cmd.Flags().GetString("config")
@@ -80,7 +84,6 @@ URL查询参数示例：
 		url, _ := cmd.Flags().GetString("url")
 		method, _ := cmd.Flags().GetString("method")
 		filePath, _ := cmd.Flags().GetString("file")
-		save, _ := cmd.Flags().GetBool("save")
 		savePath, _ := cmd.Flags().GetString("save-path")
 		timeout, _ := cmd.Flags().GetInt("timeout")
 		concurrent, _ := cmd.Flags().GetInt("concurrent")
@@ -98,6 +101,9 @@ URL查询参数示例：
 
 		// 获取查询参数
 		queryParams, _ := cmd.Flags().GetStringSlice("query")
+
+		// 获取TLS配置参数
+		ignoreTLS, _ := cmd.Flags().GetBool("ignore-tls")
 
 		// 从配置文件读取参数（如果指定了配置文件）
 		if configFile != "" {
@@ -120,7 +126,7 @@ URL查询参数示例：
 			if savePath == "" && config.Request.SavePath != "" {
 				savePath = config.Request.SavePath
 			}
-			if timeout == 5 && config.Request.Timeout != 0 { // 只有当timeout是默认值时才从配置文件读取
+			if timeout == 30 && config.Request.Timeout != 0 { // 只有当timeout是默认值时才从配置文件读取
 				timeout = config.Request.Timeout
 			}
 			if concurrent == 3 && config.Request.Concurrent != 0 { // 只有当concurrent是默认值时才从配置文件读取
@@ -141,6 +147,9 @@ URL查询参数示例：
 			if len(queryParams) == 0 && len(config.Request.Query) > 0 {
 				queryParams = config.Request.Query
 			}
+			if !ignoreTLS && config.Request.IgnoreTLSErrors {
+				ignoreTLS = config.Request.IgnoreTLSErrors
+			}
 		}
 
 		// 验证必需参数
@@ -153,21 +162,49 @@ URL查询参数示例：
 			os.Exit(1)
 		}
 
-		// 验证请求体格式参数
-		if !isXML && !isJSON {
-			fmt.Println("❌ 错误: 必须指定请求体格式，使用 --xml 或 --json 参数")
-			os.Exit(1)
-		}
-
+		// 自动检测请求体格式（从CSV文件第一行）
+		var contentType string
 		if isXML && isJSON {
 			fmt.Println("❌ 错误: 不能同时指定 --xml 和 --json 参数，请只选择一种格式")
 			os.Exit(1)
 		}
 
-		// 确定内容类型
-		contentType := "json"
 		if isXML {
 			contentType = "xml"
+		} else if isJSON {
+			contentType = "json"
+		} else {
+			// 如果没有指定格式参数，尝试从CSV文件第一行自动检测
+			fmt.Println("📖 正在检测请求体格式...")
+			data, err := utils.ReadCSV(filePath)
+			if err != nil {
+				fmt.Printf("❌ 读取CSV文件失败: %v\n", err)
+				os.Exit(1)
+			}
+
+			if len(data) == 0 {
+				fmt.Println("❌ 错误: CSV文件为空")
+				os.Exit(1)
+			}
+
+			headers := data[0]
+			if len(headers) == 1 {
+				headerUpper := strings.ToUpper(headers[0])
+				if headerUpper == "XML" {
+					contentType = "xml"
+					fmt.Println("✅ 自动检测到XML格式")
+				} else if headerUpper == "JSON" {
+					contentType = "json"
+					fmt.Println("✅ 自动检测到JSON格式")
+				} else {
+					fmt.Printf("❌ 错误: 无法自动检测请求体格式。CSV文件第一行应该是 'xml' 或 'json'，当前为: '%s'\n", headers[0])
+					fmt.Println("提示: 请在CSV文件第一行写入 'xml' 或 'json'，或使用 --xml 或 --json 参数手动指定格式")
+					os.Exit(1)
+				}
+			} else {
+				fmt.Println("❌ 错误: 无法自动检测请求体格式。对于多列CSV文件，请使用 --xml 或 --json 参数指定格式")
+				os.Exit(1)
+			}
 		}
 
 		// 打印开始信息
@@ -189,7 +226,7 @@ URL查询参数示例：
 		}
 
 		// 执行批量请求
-		if err := executeBatchRequestsWithAuth(url, method, filePath, save, savePath, timeout, concurrent, contentType, debug, authConfig, queryParams); err != nil {
+		if err := executeBatchRequestsWithAuth(url, method, filePath, savePath, timeout, concurrent, contentType, debug, authConfig, queryParams, ignoreTLS); err != nil {
 			fmt.Printf("❌ 执行失败: %v\n", err)
 			os.Exit(1)
 		}
@@ -200,15 +237,15 @@ func init() {
 	rootCmd.AddCommand(requestCmd)
 
 	// 配置文件参数组
-	requestCmd.Flags().StringP("config", "c", "", "配置文件路径（可选，默认为config.toml）")
+	requestCmd.Flags().StringP("config", "c", "config.toml", "配置文件路径（可选，默认为config.toml）")
 
 	// 必填参数组
 	requestCmd.Flags().StringP("url", "u", "", "目标URL（可选，可从配置文件读取）")
 	requestCmd.Flags().StringP("file", "f", "", "测试用例文件路径（可选，可从配置文件读取）")
 
-	// 必填参数组 - 请求体格式（必须选择其一）
-	requestCmd.Flags().BoolP("xml", "x", false, "使用XML格式发送请求体")
-	requestCmd.Flags().BoolP("json", "j", false, "使用JSON格式发送请求体")
+	// 必填参数组 - 请求体格式（可选，支持自动检测）
+	requestCmd.Flags().BoolP("xml", "x", false, "使用XML格式发送请求体（可选，未指定时自动从CSV文件检测）")
+	requestCmd.Flags().BoolP("json", "j", false, "使用JSON格式发送请求体（可选，未指定时自动从CSV文件检测）")
 
 	// 请求控制参数组
 	requestCmd.Flags().StringP("method", "m", "get", "请求方法（get/post，默认get，可从配置文件读取）")
@@ -216,7 +253,6 @@ func init() {
 	requestCmd.Flags().IntP("concurrent", "C", 3, "并发请求数（默认3，可从配置文件读取）")
 
 	// 结果保存参数组
-	requestCmd.Flags().BoolP("save", "s", false, "是否保存结果")
 	requestCmd.Flags().String("save-path", "", "结果保存路径（默认为当前目录下的result.csv，可从配置文件读取）")
 
 	// 鉴权参数组
@@ -230,6 +266,9 @@ func init() {
 	// 查询参数组
 	requestCmd.Flags().StringSliceP("query", "q", []string{}, "URL查询参数，格式：\"key=value\"，可多次使用（可选，可从配置文件读取）")
 
+	// TLS配置参数组
+	requestCmd.Flags().Bool("ignore-tls", false, "忽略TLS证书验证错误（可选，可从配置文件读取）")
+
 	// 调试参数组
 	requestCmd.Flags().Bool("debug", false, "启用调试模式，输出详细的请求信息")
 
@@ -238,7 +277,7 @@ func init() {
 }
 
 // executeBatchRequestsWithAuth 执行批量请求（支持鉴权）
-func executeBatchRequestsWithAuth(url, method, filePath string, save bool, savePath string, timeout, concurrent int, contentType string, debug bool, authConfig AuthConfig, queryParams []string) error {
+func executeBatchRequestsWithAuth(url, method, filePath string, savePath string, timeout, concurrent int, contentType string, debug bool, authConfig AuthConfig, queryParams []string, ignoreTLS bool) error {
 	// 读取CSV文件
 	fmt.Println("📖 正在读取测试用例文件...")
 	data, err := utils.ReadCSV(filePath)
@@ -261,7 +300,7 @@ func executeBatchRequestsWithAuth(url, method, filePath string, save bool, saveP
 	// 构建HTTP请求
 	useJSON := strings.ToLower(contentType) == "json"
 	useXML := strings.ToLower(contentType) == "xml"
-	requests, err := buildHTTPRequestsWithAuth(testCases, url, method, timeout, useJSON, useXML, authConfig, queryParams)
+	requests, err := buildHTTPRequestsWithAuth(testCases, url, method, timeout, useJSON, useXML, authConfig, queryParams, ignoreTLS)
 	if err != nil {
 		return err
 	}
@@ -283,11 +322,9 @@ func executeBatchRequestsWithAuth(url, method, filePath string, save bool, saveP
 	// 显示结果统计
 	displayResults(results, duration, debug)
 
-	// 保存结果（如果需要）
-	if save {
-		if err := saveResults(results, savePath); err != nil {
-			return fmt.Errorf("保存结果失败: %v", err)
-		}
+	// 保存结果（默认保存）
+	if err := saveResults(results, savePath); err != nil {
+		return fmt.Errorf("保存结果失败: %v", err)
 	}
 
 	return nil

@@ -11,6 +11,13 @@ output = "test_cases.csv"
 # 正例报文类型（xml或json）
 type = "json"
 
+# 随机化因子，控制数据变化程度（0.0-1.0，默认0.5）
+# 0.0: 不进行任何随机化，保持原值
+# 0.1-0.3: 低度随机化，适用于需要保持数据相对稳定的场景
+# 0.4-0.6: 中度随机化，平衡变化程度和数据合理性
+# 0.7-1.0: 高度随机化，适用于边界测试和异常情况测试
+variation_rate = 0.5
+
 # 正例报文（支持多行字符串）
 positive_example = '''
 {
@@ -97,6 +104,9 @@ file = "test_cases.csv"
 
 # 结果保存路径
 save_path = "results.csv"
+
+# 忽略TLS证书验证错误（默认为false）
+ignore_tls_errors = false
 
 # 请求超时时间（秒）
 timeout = 5

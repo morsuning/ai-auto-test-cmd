@@ -632,13 +632,8 @@ func extractJSONKeys(jsonStr string) []string {
 	return keys
 }
 
-// GenerateTestCases 生成测试用例（不使用约束）
-func GenerateTestCases(data map[string]any, count int) []map[string]any {
-	return GenerateTestCasesWithConstraints(data, count, false)
-}
-
-// GenerateTestCasesWithConstraints 生成测试用例（支持约束系统）
-func GenerateTestCasesWithConstraints(data map[string]any, count int, useConstraints bool) []map[string]any {
+// GenerateTestCasesWithVariationRate 生成测试用例（支持自定义随机化因子）
+func GenerateTestCasesWithVariationRate(data map[string]any, count int, variationRate float64, useConstraints bool) []map[string]any {
 	testCases := make([]map[string]any, count)
 
 	// 使用已经保存的原始字段顺序
@@ -703,10 +698,10 @@ func GenerateTestCasesWithConstraints(data map[string]any, count int, useConstra
 		for _, key := range keys {
 			if useConstraints {
 				// 使用带约束的变化生成
-				testCase[key] = generateVariationWithConstraints(data[key], key, 0.5)
+				testCase[key] = generateVariationWithConstraints(data[key], key, variationRate)
 			} else {
 				// 不使用约束，使用原始变化逻辑
-				testCase[key] = generateVariation(data[key], 0.5) // 上下浮动50%
+				testCase[key] = generateVariation(data[key], variationRate)
 			}
 		}
 		testCases[i] = testCase

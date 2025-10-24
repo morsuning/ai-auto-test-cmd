@@ -50,7 +50,7 @@ var rootCmd = &cobra.Command{
 			return
 		}
 		// 如果没有指定子命令，显示帮助信息
-		cmd.Help()
+		_ = cmd.Help()
 	},
 }
 

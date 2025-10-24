@@ -4,19 +4,21 @@ package utils
 
 import (
 	"bytes"
+	"crypto/tls"
 	"fmt"
 	"io"
 	"net/http"
 	"time"
 )
 
-// HTTPRequest 表示HTTP请求的结构
+// HTTPRequest HTTP请求结构体
 type HTTPRequest struct {
-	URL     string
-	Method  string
-	Headers map[string]string
-	Body    string
-	Timeout int // 超时时间（秒）
+	URL       string            `json:"url"`       // 请求URL
+	Method    string            `json:"method"`    // 请求方法
+	Headers   map[string]string `json:"headers"`   // 请求头
+	Body      string            `json:"body"`      // 请求体
+	Timeout   int               `json:"timeout"`   // 超时时间（秒）
+	IgnoreTLS bool              `json:"ignore_tls"` // 忽略TLS证书验证
 }
 
 // HTTPResponse 表示HTTP响应的结构
@@ -60,6 +62,13 @@ func SendRequest(req HTTPRequest) HTTPResponse {
 	// 创建客户端
 	client := &http.Client{
 		Timeout: time.Duration(timeout) * time.Second,
+	}
+
+	// 如果配置了忽略TLS证书验证，则直接使用不安全的客户端
+	if req.IgnoreTLS {
+		client.Transport = &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
 	}
 
 	// 发送请求

@@ -17,25 +17,27 @@ type LLMConfig struct {
 
 // RequestConfig 请求相关配置
 type RequestConfig struct {
-	URL        string   `toml:"url"`          // 目标URL
-	Method     string   `toml:"method"`       // 请求方法
-	File       string   `toml:"file"`         // CSV测试用例文件
-	SavePath   string   `toml:"save_path"`    // 结果保存路径
-	Timeout    int      `toml:"timeout"`      // 请求超时时间
-	Concurrent int      `toml:"concurrent"`   // 并发请求数
-	AuthBearer string   `toml:"auth_bearer"`  // Bearer Token认证
-	AuthBasic  string   `toml:"auth_basic"`   // Basic Auth认证
-	AuthAPIKey string   `toml:"auth_api_key"` // API Key认证
-	Headers    []string `toml:"headers"`      // 自定义HTTP头
-	Query      []string `toml:"query"`        // GET请求的URL查询参数
+	URL               string   `toml:"url"`                 // 目标URL
+	Method            string   `toml:"method"`              // 请求方法
+	File              string   `toml:"file"`                // CSV测试用例文件
+	SavePath          string   `toml:"save_path"`           // 结果保存路径
+	Timeout           int      `toml:"timeout"`             // 请求超时时间
+	Concurrent        int      `toml:"concurrent"`          // 并发请求数
+	AuthBearer        string   `toml:"auth_bearer"`         // Bearer Token认证
+	AuthBasic         string   `toml:"auth_basic"`          // Basic Auth认证
+	AuthAPIKey        string   `toml:"auth_api_key"`        // API Key认证
+	Headers           []string `toml:"headers"`             // 自定义HTTP头
+	Query             []string `toml:"query"`               // GET请求的URL查询参数
+	IgnoreTLSErrors   bool     `toml:"ignore_tls_errors"`   // 忽略TLS证书验证错误
 }
 
 // TestCaseConfig 用例设置
 type TestCaseConfig struct {
-	Num             int    `toml:"num"`              // 用例生成数量
-	Output          string `toml:"output"`           // 输出文件路径
-	PositiveExample string `toml:"positive_example"` // 正例报文（支持多行字符串）
-	Type            string `toml:"type"`             // 正例报文类型（xml或json）
+	Num             int     `toml:"num"`              // 用例生成数量
+	Output          string  `toml:"output"`           // 输出文件路径
+	PositiveExample string  `toml:"positive_example"` // 正例报文（支持多行字符串）
+	Type            string  `toml:"type"`             // 正例报文类型（xml或json）
+	VariationRate   float64 `toml:"variation_rate"`   // 随机化因子，控制数据变化程度（0.0-1.0，默认0.5）
 }
 
 // ConstraintsConfig 约束系统配置

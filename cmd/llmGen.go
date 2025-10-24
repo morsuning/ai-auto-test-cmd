@@ -153,7 +153,6 @@ var llmGenCmd = &cobra.Command{
 			requestParams = RequestParams{
 				URL:           config.Request.URL,
 				Method:        config.Request.Method,
-				Save:          config.Request.SavePath != "",
 				SavePath:      config.Request.SavePath,
 				Timeout:       config.Request.Timeout,
 				Concurrent:    config.Request.Concurrent,
@@ -164,6 +163,7 @@ var llmGenCmd = &cobra.Command{
 				QueryParams:   config.Request.Query,
 				IsXML:         isXML,
 				IsJSON:        isJSON,
+				IgnoreTLS:     config.Request.IgnoreTLSErrors,
 			}
 
 			// 设置默认值

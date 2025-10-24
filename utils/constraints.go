@@ -531,7 +531,7 @@ func LoadConstraintConfig(filePath string) error {
 					var temp struct {
 						BuiltinData BuiltinData `toml:"builtin_data"`
 					}
-					toml.Unmarshal(builtinBytes, &temp)
+					_ = toml.Unmarshal(builtinBytes, &temp)
 					config.BuiltinData = temp.BuiltinData
 				} else {
 					// 解析字段约束
@@ -556,7 +556,7 @@ func LoadConstraintConfig(filePath string) error {
 				var temp struct {
 					BuiltinData BuiltinData `toml:"builtin_data"`
 				}
-				toml.Unmarshal(builtinBytes, &temp)
+				_ = toml.Unmarshal(builtinBytes, &temp)
 				config.BuiltinData = temp.BuiltinData
 			} else {
 				// 解析字段约束

@@ -198,7 +198,7 @@ func BenchmarkValidateTimezone(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		for _, tz := range timezones {
-			ValidateTimezone(tz)
+			_ = ValidateTimezone(tz)
 		}
 	}
 }
