@@ -235,7 +235,6 @@ jobs:
           echo "详细使用说明请参考项目文档：" >> release_notes.md
           echo "- [中文文档](README_zh.md)" >> release_notes.md
           echo "- [English Documentation](README.md)" >> release_notes.md
-          echo "- [项目需求文档](docs/项目需求文档.md)" >> release_notes.md
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
