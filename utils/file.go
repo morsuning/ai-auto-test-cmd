@@ -3,15 +3,15 @@
 package utils
 
 import (
-	"encoding/csv"
-	"encoding/json"
-	"encoding/xml"
-	"fmt"
-	"os"
-	"path/filepath"
-	"regexp"
-	"strings"
-	"unicode/utf8"
+    "encoding/csv"
+    "encoding/json"
+    "encoding/xml"
+    "fmt"
+    "os"
+    "path/filepath"
+    "regexp"
+    "strings"
+    "unicode/utf8"
 )
 
 // SaveToCSV 将数据保存为CSV文件
@@ -206,6 +206,6 @@ func IsXMLFile(filePath string) bool {
 
 // IsJSONFile 根据文件扩展名判断是否为JSON文件
 func IsJSONFile(filePath string) bool {
-	ext := strings.ToLower(filepath.Ext(filePath))
-	return ext == ".json"
+    ext := strings.ToLower(filepath.Ext(filePath))
+    return ext == ".json"
 }

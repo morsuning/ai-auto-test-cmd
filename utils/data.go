@@ -3,17 +3,17 @@
 package utils
 
 import (
-	"encoding/json"
-	"encoding/xml"
-	"fmt"
-	"math"
-	"math/rand"
-	"reflect"
-	"regexp"
-	"sort"
-	"strconv"
-	"strings"
-	"time"
+    "encoding/json"
+    "encoding/xml"
+    "fmt"
+    "math"
+    "math/rand"
+    "reflect"
+    "regexp"
+    "sort"
+    "strconv"
+    "strings"
+    "time"
 )
 
 // 保存原始字段顺序和类型信息
@@ -22,6 +22,16 @@ var originalValueTypes map[string]string
 var originalRootElementName string
 var originalHasXMLDeclaration bool
 var originalXMLDeclaration string
+// 路径级字段顺序映射：记录每个节点路径下的子元素顺序（唯一键顺序）
+var originalKeyOrderByPath map[string][]string
+
+// XMLNode 用于解析XML时保留子节点的出现顺序
+type XMLNode struct {
+    XMLName xml.Name
+    Content []byte     `xml:",chardata"`
+    Attrs   []xml.Attr `xml:",any,attr"`
+    Nodes   []XMLNode  `xml:",any"`
+}
 
 func init() {
 	// 初始化随机数生成器
@@ -56,11 +66,11 @@ func ParseXML(xmlStr string) (map[string]any, error) {
 		}
 	}
 
-	// 使用自定义的XML解析函数
-	result, err := XMLToMap(processedXML)
-	if err != nil {
-		return nil, fmt.Errorf("解析XML失败: %v", err)
-	}
+    // 使用自定义的XML解析函数
+    result, err := XMLToMap(processedXML)
+    if err != nil {
+        return nil, fmt.Errorf("解析XML失败: %v", err)
+    }
 
 	// 提取原始根元素名称
 	// 跳过XML声明，找到第一个真正的元素
@@ -77,19 +87,19 @@ func ParseXML(xmlStr string) (map[string]any, error) {
 		}
 	}
 
-	// 提取XML字段顺序
-	// 由于XML解析过程中字段顺序可能已经丢失，我们尝试从原始XML字符串中提取
-	keys := extractXMLKeys(xmlStr)
-	if len(keys) > 0 {
-		originalKeyOrder = keys
-	} else {
-		// 如果无法从原始字符串提取，则使用解析后的结果的键
-		keys = make([]string, 0, len(result))
-		for key := range result {
-			keys = append(keys, key)
-		}
-		originalKeyOrder = keys
-	}
+    // 提取XML字段顺序
+    // 由于XML解析过程中字段顺序可能已经丢失，我们尝试从原始XML字符串中提取
+    keys := extractXMLKeys(xmlStr)
+    if len(keys) > 0 {
+        originalKeyOrder = keys
+    } else {
+        // 如果无法从原始字符串提取，则使用解析后的结果的键
+        keys = make([]string, 0, len(result))
+        for key := range result {
+            keys = append(keys, key)
+        }
+        originalKeyOrder = keys
+    }
 
 	// 如果结果中有根元素，提取其内容作为实际数据
 	for _, rootValue := range result {
@@ -213,29 +223,58 @@ func extractXMLKeys(xmlStr string) []string {
 
 // XMLToMap 将XML字符串转换为map
 func XMLToMap(xmlStr string) (map[string]any, error) {
-	// 创建一个自定义的解码器
-	decoder := xml.NewDecoder(strings.NewReader(xmlStr))
-	decoder.Strict = false
+    // 创建一个自定义的解码器
+    decoder := xml.NewDecoder(strings.NewReader(xmlStr))
+    decoder.Strict = false
 
-	// 使用一个临时结构体来存储XML数据
-	type XMLNode struct {
-		XMLName xml.Name
-		Content []byte     `xml:",chardata"`
-		Attrs   []xml.Attr `xml:",any,attr"`
-		Nodes   []XMLNode  `xml:",any"`
-	}
+    var node XMLNode
+    if err := decoder.Decode(&node); err != nil {
+        return nil, err
+    }
 
-	var node XMLNode
-	if err := decoder.Decode(&node); err != nil {
-		return nil, err
-	}
+    // 构建路径级字段顺序映射
+    buildOrderMapFromNode(node)
 
-	// 将XMLNode转换为map
-	result := make(map[string]any)
-	result[node.XMLName.Local] = nodeToMap(node)
+    // 将XMLNode转换为map
+    result := make(map[string]any)
+    result[node.XMLName.Local] = nodeToMap(node)
 
-	// 简化结果，提取实际内容
-	return simplifyXMLMap(result), nil
+    // 简化结果，提取实际内容
+    return simplifyXMLMap(result), nil
+}
+
+// buildOrderMapFromNode 遍历解析后的XML树，记录每个路径下的子元素顺序
+func buildOrderMapFromNode(root XMLNode) {
+    originalKeyOrderByPath = make(map[string][]string)
+    collectOrderRecursively(root, "")
+}
+
+// collectOrderRecursively 递归记录节点路径的唯一子键顺序
+func collectOrderRecursively(node XMLNode, path string) {
+    currentPath := path
+    if currentPath == "" {
+        currentPath = node.XMLName.Local
+    }
+
+    // 记录当前路径下的子元素唯一顺序
+    if len(node.Nodes) > 0 {
+        order := make([]string, 0, len(node.Nodes))
+        seen := make(map[string]bool)
+        for _, child := range node.Nodes {
+            name := child.XMLName.Local
+            if !seen[name] {
+                order = append(order, name)
+                seen[name] = true
+            }
+        }
+        if _, exists := originalKeyOrderByPath[currentPath]; !exists {
+            originalKeyOrderByPath[currentPath] = order
+        }
+        // 递归子节点
+        for _, child := range node.Nodes {
+            collectOrderRecursively(child, currentPath+"/"+child.XMLName.Local)
+        }
+    }
 }
 
 // simplifyXMLMap 简化XML转换后的map结构，保持嵌套层次
@@ -963,7 +1002,7 @@ func ConvertToXMLRows(testCases []map[string]any) [][]string {
 
 // convertMapToXML 将map转换为XML字符串
 func convertMapToXML(data map[string]any) (string, error) {
-	var xmlBuilder strings.Builder
+    var xmlBuilder strings.Builder
 
 	// 只有当原始XML包含XML声明时才添加XML声明
 	if originalHasXMLDeclaration {
@@ -982,8 +1021,8 @@ func convertMapToXML(data map[string]any) (string, error) {
 		rootElement = "root"
 	}
 
-	// 构建XML内容
-	xmlContent := buildXMLContent(data, "")
+    // 构建XML内容：从根元素路径开始确保字段顺序
+    xmlContent := buildXMLContent(data, rootElement)
 
 	// 如果内容为空，使用自闭合标签
 	if strings.TrimSpace(xmlContent) == "" {
@@ -995,32 +1034,50 @@ func convertMapToXML(data map[string]any) (string, error) {
 	return xmlBuilder.String(), nil
 }
 
-// buildXMLContent 递归构建XML内容
-func buildXMLContent(data map[string]any, indent string) string {
-	var xmlBuilder strings.Builder
+// buildXMLContent 递归构建XML内容，严格遵循路径级字段顺序
+func buildXMLContent(data map[string]any, currentPath string) string {
+    var xmlBuilder strings.Builder
 
-	// 对于嵌套结构，不使用全局的originalKeyOrder，而是使用当前map的键
-	keys := make([]string, 0, len(data))
-	for key := range data {
-		keys = append(keys, key)
-	}
+    // 依据路径取已记录的顺序
+    ordered := originalKeyOrderByPath[currentPath]
+    orderSet := make(map[string]struct{}, len(ordered))
+    for _, k := range ordered {
+        orderSet[k] = struct{}{}
+    }
+    // 收集当前数据中的键
+    keys := make([]string, 0, len(data))
+    for key := range data {
+        // 按已有顺序先行，其他键追加
+        keys = append(keys, key)
+    }
+    // 构造最终顺序：先按记录的顺序，再追加未在记录中的键（按字典序稳定）
+    finalKeys := make([]string, 0, len(keys))
+    for _, k := range ordered {
+        if _, exists := data[k]; exists {
+            finalKeys = append(finalKeys, k)
+        }
+    }
+    // 追加未在ordered中的键
+    extras := make([]string, 0)
+    for _, k := range keys {
+        if _, ok := orderSet[k]; !ok {
+            extras = append(extras, k)
+        }
+    }
+    sort.Strings(extras)
+    finalKeys = append(finalKeys, extras...)
 
-	// 如果是根级别且有保存的顺序，则使用保存的顺序
-	if indent == "" && len(originalKeyOrder) > 0 {
-		keys = originalKeyOrder
-	}
+    hasContent := false
+    for _, key := range finalKeys {
+        value, exists := data[key]
+        if !exists {
+            continue
+        }
 
-	hasContent := false
-	for _, key := range keys {
-		value, exists := data[key]
-		if !exists {
-			continue
-		}
-
-		if !hasContent {
-			xmlBuilder.WriteString(" ")
-			hasContent = true
-		}
+        if !hasContent {
+            xmlBuilder.WriteString(" ")
+            hasContent = true
+        }
 
 		// 清理XML标签名（移除特殊字符）
 		cleanKey := strings.ReplaceAll(key, " ", "_")
@@ -1051,20 +1108,20 @@ func buildXMLContent(data map[string]any, indent string) string {
 			}
 		case bool:
 			xmlBuilder.WriteString(fmt.Sprintf("<%s>%t</%s>", cleanKey, v, cleanKey))
-		case map[string]any:
-			// 嵌套对象，递归处理
-			nestedContent := buildXMLContent(v, indent+"  ")
-			if strings.TrimSpace(nestedContent) == "" {
-				// 空的嵌套对象，使用自闭合标签
-				xmlBuilder.WriteString(fmt.Sprintf("<%s />", cleanKey))
-			} else {
-				xmlBuilder.WriteString(fmt.Sprintf("<%s>%s</%s>", cleanKey, nestedContent, cleanKey))
-			}
-		case []any:
-			// 数组，处理每个元素
-			for _, item := range v {
-				// 处理数组元素的格式
-				switch iv := item.(type) {
+        case map[string]any:
+            // 嵌套对象，递归处理，路径深入
+            nestedContent := buildXMLContent(v, currentPath+"/"+key)
+            if strings.TrimSpace(nestedContent) == "" {
+                // 空的嵌套对象，使用自闭合标签
+                xmlBuilder.WriteString(fmt.Sprintf("<%s />", cleanKey))
+            } else {
+                xmlBuilder.WriteString(fmt.Sprintf("<%s>%s</%s>", cleanKey, nestedContent, cleanKey))
+            }
+        case []any:
+            // 数组，处理每个元素
+            for _, item := range v {
+                // 处理数组元素的格式
+                switch iv := item.(type) {
 				case int, int8, int16, int32, int64:
 					itemStr := fmt.Sprintf("%d", iv)
 					xmlBuilder.WriteString(fmt.Sprintf("<%s>%s</%s>", cleanKey, itemStr, cleanKey))
@@ -1083,15 +1140,15 @@ func buildXMLContent(data map[string]any, indent string) string {
 				case bool:
 					itemStr := fmt.Sprintf("%t", iv)
 					xmlBuilder.WriteString(fmt.Sprintf("<%s>%s</%s>", cleanKey, itemStr, cleanKey))
-				case map[string]any:
-					// 嵌套对象，递归处理
-					nestedContent := buildXMLContent(iv, indent+"  ")
-					if strings.TrimSpace(nestedContent) == "" {
-						// 空的嵌套对象，使用自闭合标签
-						xmlBuilder.WriteString(fmt.Sprintf("<%s />", cleanKey))
-					} else {
-						xmlBuilder.WriteString(fmt.Sprintf("<%s>%s</%s>", cleanKey, nestedContent, cleanKey))
-					}
+                case map[string]any:
+                    // 嵌套对象，递归处理，路径深入到元素路径
+                    nestedContent := buildXMLContent(iv, currentPath+"/"+key)
+                    if strings.TrimSpace(nestedContent) == "" {
+                        // 空的嵌套对象，使用自闭合标签
+                        xmlBuilder.WriteString(fmt.Sprintf("<%s />", cleanKey))
+                    } else {
+                        xmlBuilder.WriteString(fmt.Sprintf("<%s>%s</%s>", cleanKey, nestedContent, cleanKey))
+                    }
 				case nil:
 					// 空元素
 					xmlBuilder.WriteString(fmt.Sprintf("<%s />", cleanKey))
