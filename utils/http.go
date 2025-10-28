@@ -13,11 +13,11 @@ import (
 
 // HTTPRequest HTTP请求结构体
 type HTTPRequest struct {
-	URL       string            `json:"url"`       // 请求URL
-	Method    string            `json:"method"`    // 请求方法
-	Headers   map[string]string `json:"headers"`   // 请求头
-	Body      string            `json:"body"`      // 请求体
-	Timeout   int               `json:"timeout"`   // 超时时间（秒）
+	URL       string            `json:"url"`        // 请求URL
+	Method    string            `json:"method"`     // 请求方法
+	Headers   map[string]string `json:"headers"`    // 请求头
+	Body      string            `json:"body"`       // 请求体
+	Timeout   int               `json:"timeout"`    // 超时时间（秒）
 	IgnoreTLS bool              `json:"ignore_tls"` // 忽略TLS证书验证
 }
 

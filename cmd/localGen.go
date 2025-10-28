@@ -2,12 +2,12 @@
 package cmd
 
 import (
-    "encoding/json"
-    "fmt"
+	"encoding/json"
+	"fmt"
 
-    "github.com/morsuning/ai-auto-test-cmd/models"
-    "github.com/morsuning/ai-auto-test-cmd/utils"
-    "github.com/spf13/cobra"
+	"github.com/morsuning/ai-auto-test-cmd/models"
+	"github.com/morsuning/ai-auto-test-cmd/utils"
+	"github.com/spf13/cobra"
 )
 
 // localGenCmd 表示本地生成测试用例的命令
@@ -263,13 +263,13 @@ var localGenCmd = &cobra.Command{
 			}
 		}
 
-        // 保存到文件
-        err = utils.SaveToCSV(csvData, output)
-        if err != nil {
-            fmt.Printf("保存CSV文件失败: %v\n", err)
-            return
-        }
-        fmt.Printf("✅ 成功生成 %d 条测试用例并保存到 %s\n", num, output)
+		// 保存到文件
+		err = utils.SaveToCSV(csvData, output)
+		if err != nil {
+			fmt.Printf("保存CSV文件失败: %v\n", err)
+			return
+		}
+		fmt.Printf("✅ 成功生成 %d 条测试用例并保存到 %s\n", num, output)
 
 		// 如果使用exec参数，执行生成的测试用例
 		if exec {

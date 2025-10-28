@@ -3,17 +3,17 @@
 package utils
 
 import (
-    "encoding/json"
-    "encoding/xml"
-    "fmt"
-    "math"
-    "math/rand"
-    "reflect"
-    "regexp"
-    "sort"
-    "strconv"
-    "strings"
-    "time"
+	"encoding/json"
+	"encoding/xml"
+	"fmt"
+	"math"
+	"math/rand"
+	"reflect"
+	"regexp"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
 )
 
 // 保存原始字段顺序和类型信息
@@ -22,15 +22,16 @@ var originalValueTypes map[string]string
 var originalRootElementName string
 var originalHasXMLDeclaration bool
 var originalXMLDeclaration string
+
 // 路径级字段顺序映射：记录每个节点路径下的子元素顺序（唯一键顺序）
 var originalKeyOrderByPath map[string][]string
 
 // XMLNode 用于解析XML时保留子节点的出现顺序
 type XMLNode struct {
-    XMLName xml.Name
-    Content []byte     `xml:",chardata"`
-    Attrs   []xml.Attr `xml:",any,attr"`
-    Nodes   []XMLNode  `xml:",any"`
+	XMLName xml.Name
+	Content []byte     `xml:",chardata"`
+	Attrs   []xml.Attr `xml:",any,attr"`
+	Nodes   []XMLNode  `xml:",any"`
 }
 
 func init() {
@@ -66,11 +67,11 @@ func ParseXML(xmlStr string) (map[string]any, error) {
 		}
 	}
 
-    // 使用自定义的XML解析函数
-    result, err := XMLToMap(processedXML)
-    if err != nil {
-        return nil, fmt.Errorf("解析XML失败: %v", err)
-    }
+	// 使用自定义的XML解析函数
+	result, err := XMLToMap(processedXML)
+	if err != nil {
+		return nil, fmt.Errorf("解析XML失败: %v", err)
+	}
 
 	// 提取原始根元素名称
 	// 跳过XML声明，找到第一个真正的元素
@@ -87,19 +88,19 @@ func ParseXML(xmlStr string) (map[string]any, error) {
 		}
 	}
 
-    // 提取XML字段顺序
-    // 由于XML解析过程中字段顺序可能已经丢失，我们尝试从原始XML字符串中提取
-    keys := extractXMLKeys(xmlStr)
-    if len(keys) > 0 {
-        originalKeyOrder = keys
-    } else {
-        // 如果无法从原始字符串提取，则使用解析后的结果的键
-        keys = make([]string, 0, len(result))
-        for key := range result {
-            keys = append(keys, key)
-        }
-        originalKeyOrder = keys
-    }
+	// 提取XML字段顺序
+	// 由于XML解析过程中字段顺序可能已经丢失，我们尝试从原始XML字符串中提取
+	keys := extractXMLKeys(xmlStr)
+	if len(keys) > 0 {
+		originalKeyOrder = keys
+	} else {
+		// 如果无法从原始字符串提取，则使用解析后的结果的键
+		keys = make([]string, 0, len(result))
+		for key := range result {
+			keys = append(keys, key)
+		}
+		originalKeyOrder = keys
+	}
 
 	// 如果结果中有根元素，提取其内容作为实际数据
 	for _, rootValue := range result {
@@ -223,63 +224,63 @@ func extractXMLKeys(xmlStr string) []string {
 
 // XMLToMap 将XML字符串转换为map
 func XMLToMap(xmlStr string) (map[string]any, error) {
-    // 创建一个自定义的解码器
-    decoder := xml.NewDecoder(strings.NewReader(xmlStr))
-    decoder.Strict = false
+	// 创建一个自定义的解码器
+	decoder := xml.NewDecoder(strings.NewReader(xmlStr))
+	decoder.Strict = false
 
-    var node XMLNode
-    if err := decoder.Decode(&node); err != nil {
-        return nil, err
-    }
+	var node XMLNode
+	if err := decoder.Decode(&node); err != nil {
+		return nil, err
+	}
 
-    // 构建路径级字段顺序映射
-    buildOrderMapFromNode(node)
+	// 构建路径级字段顺序映射
+	buildOrderMapFromNode(node)
 
-    // 将XMLNode转换为map
-    result := make(map[string]any)
-    result[node.XMLName.Local] = nodeToMap(node)
+	// 将XMLNode转换为map
+	result := make(map[string]any)
+	result[node.XMLName.Local] = nodeToMap(node)
 
-    // 简化结果，提取实际内容
-    return simplifyXMLMap(result), nil
+	// 简化结果，提取实际内容
+	return simplifyXMLMap(result), nil
 }
 
 // buildOrderMapFromNode 遍历解析后的XML树，记录每个路径下的子元素顺序
 func buildOrderMapFromNode(root XMLNode) {
-    originalKeyOrderByPath = make(map[string][]string)
-    collectOrderRecursively(root, "")
+	originalKeyOrderByPath = make(map[string][]string)
+	collectOrderRecursively(root, "")
 }
 
 // collectOrderRecursively 递归记录节点路径的唯一子键顺序
 func collectOrderRecursively(node XMLNode, path string) {
-    currentPath := path
-    if currentPath == "" {
-        currentPath = node.XMLName.Local
-    }
+	currentPath := path
+	if currentPath == "" {
+		currentPath = node.XMLName.Local
+	}
 
-    // 记录当前路径下的子元素唯一顺序
-    if len(node.Nodes) > 0 {
-        order := make([]string, 0, len(node.Nodes))
-        seen := make(map[string]bool)
-        for _, child := range node.Nodes {
-            name := child.XMLName.Local
-            if !seen[name] {
-                order = append(order, name)
-                seen[name] = true
-            }
-        }
-        if _, exists := originalKeyOrderByPath[currentPath]; !exists {
-            originalKeyOrderByPath[currentPath] = order
-        }
-        // 递归子节点
-        for _, child := range node.Nodes {
-            collectOrderRecursively(child, currentPath+"/"+child.XMLName.Local)
-        }
-    }
+	// 记录当前路径下的子元素唯一顺序
+	if len(node.Nodes) > 0 {
+		order := make([]string, 0, len(node.Nodes))
+		seen := make(map[string]bool)
+		for _, child := range node.Nodes {
+			name := child.XMLName.Local
+			if !seen[name] {
+				order = append(order, name)
+				seen[name] = true
+			}
+		}
+		if _, exists := originalKeyOrderByPath[currentPath]; !exists {
+			originalKeyOrderByPath[currentPath] = order
+		}
+		// 递归子节点
+		for _, child := range node.Nodes {
+			collectOrderRecursively(child, currentPath+"/"+child.XMLName.Local)
+		}
+	}
 }
 
 // simplifyXMLMap 简化XML转换后的map结构，保持嵌套层次
 func simplifyXMLMap(data map[string]any) map[string]any {
-    result := make(map[string]any)
+	result := make(map[string]any)
 
 	// 处理根节点
 	for key, value := range data {
@@ -290,63 +291,63 @@ func simplifyXMLMap(data map[string]any) map[string]any {
 		switch v := value.(type) {
 		case map[string]any:
 			// 如果是简单的内容节点 (只有#content和_name)
-            if content, ok := v["#content"]; ok {
-                // 保持内容为原始字符串，避免数值转换导致前导零丢失
-                strContent, isStr := content.(string)
-                if isStr {
-                    strContent = strings.TrimSpace(strContent)
-                    if strContent != "" {
-                        result[key] = strContent
-                    } else {
-                        // 空内容，表示空元素
-                        result[key] = nil
-                    }
-                } else {
-                    result[key] = content
-                }
-            } else if len(v) == 1 && v["_name"] != nil {
-                // 空节点（自闭合标签）
-                result[key] = nil
-            } else {
-                // 递归处理子节点，保持嵌套结构
-                simplified := simplifyXMLMap(v)
-                result[key] = simplified
-            }
-        case []any:
-            // 处理数组
-            array := make([]any, 0, len(v))
-            for _, item := range v {
-                if mapItem, ok := item.(map[string]any); ok {
-                    // 如果数组元素是简单的内容节点
-                    if content, ok := mapItem["#content"]; ok {
-                        // 保持数组元素为原始字符串
-                        strContent, isStr := content.(string)
-                        if isStr {
-                            strContent = strings.TrimSpace(strContent)
-                            if strContent != "" {
-                                array = append(array, strContent)
-                            } else {
-                                array = append(array, nil)
-                            }
-                        } else {
-                            array = append(array, content)
-                        }
-                    } else {
-                        // 递归处理复杂节点
-                        simplified := simplifyXMLMap(mapItem)
-                        array = append(array, simplified)
-                    }
-                } else if item != nil {
-                    array = append(array, item)
-                }
-            }
-            result[key] = array
-        default:
-            if v != nil {
-                result[key] = v
-            }
-        }
-    }
+			if content, ok := v["#content"]; ok {
+				// 保持内容为原始字符串，避免数值转换导致前导零丢失
+				strContent, isStr := content.(string)
+				if isStr {
+					strContent = strings.TrimSpace(strContent)
+					if strContent != "" {
+						result[key] = strContent
+					} else {
+						// 空内容，表示空元素
+						result[key] = nil
+					}
+				} else {
+					result[key] = content
+				}
+			} else if len(v) == 1 && v["_name"] != nil {
+				// 空节点（自闭合标签）
+				result[key] = nil
+			} else {
+				// 递归处理子节点，保持嵌套结构
+				simplified := simplifyXMLMap(v)
+				result[key] = simplified
+			}
+		case []any:
+			// 处理数组
+			array := make([]any, 0, len(v))
+			for _, item := range v {
+				if mapItem, ok := item.(map[string]any); ok {
+					// 如果数组元素是简单的内容节点
+					if content, ok := mapItem["#content"]; ok {
+						// 保持数组元素为原始字符串
+						strContent, isStr := content.(string)
+						if isStr {
+							strContent = strings.TrimSpace(strContent)
+							if strContent != "" {
+								array = append(array, strContent)
+							} else {
+								array = append(array, nil)
+							}
+						} else {
+							array = append(array, content)
+						}
+					} else {
+						// 递归处理复杂节点
+						simplified := simplifyXMLMap(mapItem)
+						array = append(array, simplified)
+					}
+				} else if item != nil {
+					array = append(array, item)
+				}
+			}
+			result[key] = array
+		default:
+			if v != nil {
+				result[key] = v
+			}
+		}
+	}
 
 	return result
 }
@@ -370,15 +371,15 @@ func nodeToMap(node any) any {
 	case reflect.Bool:
 		return v.Bool()
 
-    case reflect.Slice:
-        // 处理字节数组：保持原始字符串，避免数值转换
-        if v.Type().Elem().Kind() == reflect.Uint8 {
-            s := strings.TrimSpace(string(v.Bytes()))
-            if s == "" {
-                return nil
-            }
-            return s
-        }
+	case reflect.Slice:
+		// 处理字节数组：保持原始字符串，避免数值转换
+		if v.Type().Elem().Kind() == reflect.Uint8 {
+			s := strings.TrimSpace(string(v.Bytes()))
+			if s == "" {
+				return nil
+			}
+			return s
+		}
 
 		// 处理其他类型的切片
 		result := make([]any, v.Len())
@@ -624,7 +625,7 @@ func extractJSONKeys(jsonStr string) []string {
 
 // GenerateTestCasesWithVariationRate 生成测试用例（支持自定义随机化因子）
 func GenerateTestCasesWithVariationRate(data map[string]any, count int, variationRate float64, useConstraints bool) []map[string]any {
-    testCases := make([]map[string]any, count)
+	testCases := make([]map[string]any, count)
 
 	// 使用已经保存的原始字段顺序
 	keys := originalKeyOrder
@@ -681,26 +682,26 @@ func GenerateTestCasesWithVariationRate(data map[string]any, count int, variatio
 		}
 	}
 
-    // 生成指定数量的测试用例
-    for i := 0; i < count; i++ {
-        testCase := make(map[string]any)
-        // 为每个测试用例提前选择组合约束的分组，并构建字段覆盖表
-        var compositeOverrides map[string]string
-        if useConstraints {
-            compositeOverrides = buildCompositeOverrides()
-        }
-        // 按原始顺序处理每个字段
-        for _, key := range keys {
-            if useConstraints {
-                // 使用带约束的变化生成
-                testCase[key] = generateVariationWithConstraints(data[key], key, variationRate, compositeOverrides)
-            } else {
-                // 不使用约束，使用原始变化逻辑
-                testCase[key] = generateVariation(data[key], variationRate)
-            }
-        }
-        testCases[i] = testCase
-    }
+	// 生成指定数量的测试用例
+	for i := 0; i < count; i++ {
+		testCase := make(map[string]any)
+		// 为每个测试用例提前选择组合约束的分组，并构建字段覆盖表
+		var compositeOverrides map[string]string
+		if useConstraints {
+			compositeOverrides = buildCompositeOverrides()
+		}
+		// 按原始顺序处理每个字段
+		for _, key := range keys {
+			if useConstraints {
+				// 使用带约束的变化生成
+				testCase[key] = generateVariationWithConstraints(data[key], key, variationRate, compositeOverrides)
+			} else {
+				// 不使用约束，使用原始变化逻辑
+				testCase[key] = generateVariation(data[key], variationRate)
+			}
+		}
+		testCases[i] = testCase
+	}
 
 	// 保存类型信息到全局变量（字段顺序已在ParseJSON中设置）
 	originalValueTypes = types
@@ -840,144 +841,144 @@ func generateVariation(value any, variationRate float64) any {
 
 // generateVariationWithConstraints 根据约束生成变化值
 func generateVariationWithConstraints(value any, fieldName string, variationRate float64, compositeOverrides map[string]string) any {
-    // 处理嵌套结构
-    switch v := value.(type) {
-    case map[string]any:
-        // 对象，先检查是否有针对整个对象的约束
-            if constraint := FindFieldConstraint(fieldName); constraint != nil {
-                // 如果是keep_original约束，需要特殊处理：保持原值但允许子字段覆盖
-                if constraint.Type == "keep_original" || (constraint.KeepOriginal != nil && *constraint.KeepOriginal) {
-                    // 递归处理每个属性，子字段的约束优先
-                    result := make(map[string]any)
-                for key, item := range v {
-                    // 构建嵌套字段名
-                    nestedFieldName := fieldName + "." + key
-                    // 检查子字段是否有单独的约束
-                    if childConstraint := FindFieldConstraint(nestedFieldName); childConstraint != nil {
-                        // 子字段有约束，使用子字段约束
-                        result[key] = generateVariationWithConstraints(item, nestedFieldName, variationRate, compositeOverrides)
-                    } else if childConstraint := FindFieldConstraint(key); childConstraint != nil {
-                        // 检查是否有直接字段名的约束
-                        result[key] = generateVariationWithConstraints(item, key, variationRate, compositeOverrides)
-                    } else {
-                        // 子字段没有约束：在 keep_original 场景下，优先应用组合覆盖，否则保持原值
-                        // 对嵌套结构递归以便向下应用组合覆盖；对基础类型直接保留或覆盖
-                        switch itemTyped := item.(type) {
-                        case map[string]any, []any:
-                            result[key] = generateVariationWithConstraints(item, nestedFieldName, variationRate, compositeOverrides)
-                        default:
-                            // 简化字段名为路径最后一段并归一化后尝试组合覆盖
-                            simpleFieldName := nestedFieldName
-                            if strings.Contains(simpleFieldName, ".") {
-                                parts := strings.Split(simpleFieldName, ".")
-                                simpleFieldName = parts[len(parts)-1]
-                            }
-                            if idx := strings.Index(simpleFieldName, "["); idx != -1 {
-                                simpleFieldName = simpleFieldName[:idx]
-                            }
-                            keyNorm := normalizeKey(simpleFieldName)
-                            if compositeOverrides != nil {
-                                if val, ok := compositeOverrides[keyNorm]; ok {
-                                    result[key] = val
-                                    continue
-                                }
-                            }
-                            // 无组合覆盖，保持原值
-                            result[key] = itemTyped
-                        }
-                    }
-                }
-                return result
-            } else {
-                // 其他类型的约束，直接应用
-                return GenerateConstrainedValue(constraint, value)
-            }
-        } else {
-            // 没有针对整个对象的约束，递归处理每个属性
-            result := make(map[string]any)
-            for key, item := range v {
-                // 构建嵌套字段名
-                nestedFieldName := fieldName + "." + key
-                result[key] = generateVariationWithConstraints(item, nestedFieldName, variationRate, compositeOverrides)
-            }
-            return result
-        }
-    case []any:
-        // 数组，递归处理每个元素
-        result := make([]any, len(v))
-        for i, item := range v {
-            // 构建数组元素字段名
-            arrayFieldName := fmt.Sprintf("%s[%d]", fieldName, i)
-            result[i] = generateVariationWithConstraints(item, arrayFieldName, variationRate, compositeOverrides)
-        }
-        return result
-    default:
-        // 组合约束字段覆盖优先
-        if compositeOverrides != nil {
-            // 简化字段名为路径最后一段
-            simpleFieldName := fieldName
-            if strings.Contains(simpleFieldName, ".") {
-                parts := strings.Split(simpleFieldName, ".")
-                simpleFieldName = parts[len(parts)-1]
-            }
-            // 去掉数组索引标记
-            if idx := strings.Index(simpleFieldName, "["); idx != -1 {
-                simpleFieldName = simpleFieldName[:idx]
-            }
-            key := normalizeKey(simpleFieldName)
-            if val, ok := compositeOverrides[key]; ok {
-                return val
-            }
-        }
-        // 基本类型，尝试查找字段约束
-        if constraint := FindFieldConstraint(fieldName); constraint != nil {
-            // 使用约束生成值
-            return GenerateConstrainedValue(constraint, value)
-        }
-        // 没有约束，使用原始变化逻辑
-        return generateVariation(value, variationRate)
-    }
+	// 处理嵌套结构
+	switch v := value.(type) {
+	case map[string]any:
+		// 对象，先检查是否有针对整个对象的约束
+		if constraint := FindFieldConstraint(fieldName); constraint != nil {
+			// 如果是keep_original约束，需要特殊处理：保持原值但允许子字段覆盖
+			if constraint.Type == "keep_original" || (constraint.KeepOriginal != nil && *constraint.KeepOriginal) {
+				// 递归处理每个属性，子字段的约束优先
+				result := make(map[string]any)
+				for key, item := range v {
+					// 构建嵌套字段名
+					nestedFieldName := fieldName + "." + key
+					// 检查子字段是否有单独的约束
+					if childConstraint := FindFieldConstraint(nestedFieldName); childConstraint != nil {
+						// 子字段有约束，使用子字段约束
+						result[key] = generateVariationWithConstraints(item, nestedFieldName, variationRate, compositeOverrides)
+					} else if childConstraint := FindFieldConstraint(key); childConstraint != nil {
+						// 检查是否有直接字段名的约束
+						result[key] = generateVariationWithConstraints(item, key, variationRate, compositeOverrides)
+					} else {
+						// 子字段没有约束：在 keep_original 场景下，优先应用组合覆盖，否则保持原值
+						// 对嵌套结构递归以便向下应用组合覆盖；对基础类型直接保留或覆盖
+						switch itemTyped := item.(type) {
+						case map[string]any, []any:
+							result[key] = generateVariationWithConstraints(item, nestedFieldName, variationRate, compositeOverrides)
+						default:
+							// 简化字段名为路径最后一段并归一化后尝试组合覆盖
+							simpleFieldName := nestedFieldName
+							if strings.Contains(simpleFieldName, ".") {
+								parts := strings.Split(simpleFieldName, ".")
+								simpleFieldName = parts[len(parts)-1]
+							}
+							if idx := strings.Index(simpleFieldName, "["); idx != -1 {
+								simpleFieldName = simpleFieldName[:idx]
+							}
+							keyNorm := normalizeKey(simpleFieldName)
+							if compositeOverrides != nil {
+								if val, ok := compositeOverrides[keyNorm]; ok {
+									result[key] = val
+									continue
+								}
+							}
+							// 无组合覆盖，保持原值
+							result[key] = itemTyped
+						}
+					}
+				}
+				return result
+			} else {
+				// 其他类型的约束，直接应用
+				return GenerateConstrainedValue(constraint, value)
+			}
+		} else {
+			// 没有针对整个对象的约束，递归处理每个属性
+			result := make(map[string]any)
+			for key, item := range v {
+				// 构建嵌套字段名
+				nestedFieldName := fieldName + "." + key
+				result[key] = generateVariationWithConstraints(item, nestedFieldName, variationRate, compositeOverrides)
+			}
+			return result
+		}
+	case []any:
+		// 数组，递归处理每个元素
+		result := make([]any, len(v))
+		for i, item := range v {
+			// 构建数组元素字段名
+			arrayFieldName := fmt.Sprintf("%s[%d]", fieldName, i)
+			result[i] = generateVariationWithConstraints(item, arrayFieldName, variationRate, compositeOverrides)
+		}
+		return result
+	default:
+		// 组合约束字段覆盖优先
+		if compositeOverrides != nil {
+			// 简化字段名为路径最后一段
+			simpleFieldName := fieldName
+			if strings.Contains(simpleFieldName, ".") {
+				parts := strings.Split(simpleFieldName, ".")
+				simpleFieldName = parts[len(parts)-1]
+			}
+			// 去掉数组索引标记
+			if idx := strings.Index(simpleFieldName, "["); idx != -1 {
+				simpleFieldName = simpleFieldName[:idx]
+			}
+			key := normalizeKey(simpleFieldName)
+			if val, ok := compositeOverrides[key]; ok {
+				return val
+			}
+		}
+		// 基本类型，尝试查找字段约束
+		if constraint := FindFieldConstraint(fieldName); constraint != nil {
+			// 使用约束生成值
+			return GenerateConstrainedValue(constraint, value)
+		}
+		// 没有约束，使用原始变化逻辑
+		return generateVariation(value, variationRate)
+	}
 }
 
 // buildCompositeOverrides 针对当前测试用例，预先选择每个组合约束的一行数据并构建覆盖映射
 func buildCompositeOverrides() map[string]string {
-    overrides := make(map[string]string)
-    if globalConstraintConfig == nil || globalConstraintConfig.Constraints == nil {
-        return overrides
-    }
-    for _, constraint := range globalConstraintConfig.Constraints {
-        if strings.ToLower(constraint.Type) == "composite" {
-            // 需要 fields 和 data
-            if len(constraint.Fields) == 0 || len(constraint.Data) == 0 {
-                continue
-            }
-            // 随机选择一组数据（以组为单位随机）
-            idx := rand.Intn(len(constraint.Data))
-            row := constraint.Data[idx]
-            if len(row) != len(constraint.Fields) {
-                // 跳过不合法的行
-                continue
-            }
-            for i, f := range constraint.Fields {
-                val := row[i]
-                // 完整路径键（如 user.province）
-                fullKey := normalizeKey(f)
-                overrides[fullKey] = val
-                // 末段字段名键（如 province），兼容嵌套路径
-                simple := f
-                if strings.Contains(simple, ".") {
-                    parts := strings.Split(simple, ".")
-                    simple = parts[len(parts)-1]
-                }
-                if idx := strings.Index(simple, "["); idx != -1 {
-                    simple = simple[:idx]
-                }
-                lastKey := normalizeKey(simple)
-                overrides[lastKey] = val
-            }
-        }
-    }
-    return overrides
+	overrides := make(map[string]string)
+	if globalConstraintConfig == nil || globalConstraintConfig.Constraints == nil {
+		return overrides
+	}
+	for _, constraint := range globalConstraintConfig.Constraints {
+		if strings.ToLower(constraint.Type) == "composite" {
+			// 需要 fields 和 data
+			if len(constraint.Fields) == 0 || len(constraint.Data) == 0 {
+				continue
+			}
+			// 随机选择一组数据（以组为单位随机）
+			idx := rand.Intn(len(constraint.Data))
+			row := constraint.Data[idx]
+			if len(row) != len(constraint.Fields) {
+				// 跳过不合法的行
+				continue
+			}
+			for i, f := range constraint.Fields {
+				val := row[i]
+				// 完整路径键（如 user.province）
+				fullKey := normalizeKey(f)
+				overrides[fullKey] = val
+				// 末段字段名键（如 province），兼容嵌套路径
+				simple := f
+				if strings.Contains(simple, ".") {
+					parts := strings.Split(simple, ".")
+					simple = parts[len(parts)-1]
+				}
+				if idx := strings.Index(simple, "["); idx != -1 {
+					simple = simple[:idx]
+				}
+				lastKey := normalizeKey(simple)
+				overrides[lastKey] = val
+			}
+		}
+	}
+	return overrides
 }
 
 // randomizeString 随机修改字符串
@@ -1088,7 +1089,7 @@ func ConvertToXMLRows(testCases []map[string]any) [][]string {
 
 // convertMapToXML 将map转换为XML字符串
 func convertMapToXML(data map[string]any) (string, error) {
-    var xmlBuilder strings.Builder
+	var xmlBuilder strings.Builder
 
 	// 只有当原始XML包含XML声明时才添加XML声明
 	if originalHasXMLDeclaration {
@@ -1107,8 +1108,8 @@ func convertMapToXML(data map[string]any) (string, error) {
 		rootElement = "root"
 	}
 
-    // 构建XML内容：从根元素路径开始确保字段顺序
-    xmlContent := buildXMLContent(data, rootElement)
+	// 构建XML内容：从根元素路径开始确保字段顺序
+	xmlContent := buildXMLContent(data, rootElement)
 
 	// 如果内容为空，使用自闭合标签
 	if strings.TrimSpace(xmlContent) == "" {
@@ -1122,48 +1123,48 @@ func convertMapToXML(data map[string]any) (string, error) {
 
 // buildXMLContent 递归构建XML内容，严格遵循路径级字段顺序
 func buildXMLContent(data map[string]any, currentPath string) string {
-    var xmlBuilder strings.Builder
+	var xmlBuilder strings.Builder
 
-    // 依据路径取已记录的顺序
-    ordered := originalKeyOrderByPath[currentPath]
-    orderSet := make(map[string]struct{}, len(ordered))
-    for _, k := range ordered {
-        orderSet[k] = struct{}{}
-    }
-    // 收集当前数据中的键
-    keys := make([]string, 0, len(data))
-    for key := range data {
-        // 按已有顺序先行，其他键追加
-        keys = append(keys, key)
-    }
-    // 构造最终顺序：先按记录的顺序，再追加未在记录中的键（按字典序稳定）
-    finalKeys := make([]string, 0, len(keys))
-    for _, k := range ordered {
-        if _, exists := data[k]; exists {
-            finalKeys = append(finalKeys, k)
-        }
-    }
-    // 追加未在ordered中的键
-    extras := make([]string, 0)
-    for _, k := range keys {
-        if _, ok := orderSet[k]; !ok {
-            extras = append(extras, k)
-        }
-    }
-    sort.Strings(extras)
-    finalKeys = append(finalKeys, extras...)
+	// 依据路径取已记录的顺序
+	ordered := originalKeyOrderByPath[currentPath]
+	orderSet := make(map[string]struct{}, len(ordered))
+	for _, k := range ordered {
+		orderSet[k] = struct{}{}
+	}
+	// 收集当前数据中的键
+	keys := make([]string, 0, len(data))
+	for key := range data {
+		// 按已有顺序先行，其他键追加
+		keys = append(keys, key)
+	}
+	// 构造最终顺序：先按记录的顺序，再追加未在记录中的键（按字典序稳定）
+	finalKeys := make([]string, 0, len(keys))
+	for _, k := range ordered {
+		if _, exists := data[k]; exists {
+			finalKeys = append(finalKeys, k)
+		}
+	}
+	// 追加未在ordered中的键
+	extras := make([]string, 0)
+	for _, k := range keys {
+		if _, ok := orderSet[k]; !ok {
+			extras = append(extras, k)
+		}
+	}
+	sort.Strings(extras)
+	finalKeys = append(finalKeys, extras...)
 
-    hasContent := false
-    for _, key := range finalKeys {
-        value, exists := data[key]
-        if !exists {
-            continue
-        }
+	hasContent := false
+	for _, key := range finalKeys {
+		value, exists := data[key]
+		if !exists {
+			continue
+		}
 
-        if !hasContent {
-            xmlBuilder.WriteString(" ")
-            hasContent = true
-        }
+		if !hasContent {
+			xmlBuilder.WriteString(" ")
+			hasContent = true
+		}
 
 		// 清理XML标签名（移除特殊字符）
 		cleanKey := strings.ReplaceAll(key, " ", "_")
@@ -1194,20 +1195,20 @@ func buildXMLContent(data map[string]any, currentPath string) string {
 			}
 		case bool:
 			xmlBuilder.WriteString(fmt.Sprintf("<%s>%t</%s>", cleanKey, v, cleanKey))
-        case map[string]any:
-            // 嵌套对象，递归处理，路径深入
-            nestedContent := buildXMLContent(v, currentPath+"/"+key)
-            if strings.TrimSpace(nestedContent) == "" {
-                // 空的嵌套对象，使用自闭合标签
-                xmlBuilder.WriteString(fmt.Sprintf("<%s />", cleanKey))
-            } else {
-                xmlBuilder.WriteString(fmt.Sprintf("<%s>%s</%s>", cleanKey, nestedContent, cleanKey))
-            }
-        case []any:
-            // 数组，处理每个元素
-            for _, item := range v {
-                // 处理数组元素的格式
-                switch iv := item.(type) {
+		case map[string]any:
+			// 嵌套对象，递归处理，路径深入
+			nestedContent := buildXMLContent(v, currentPath+"/"+key)
+			if strings.TrimSpace(nestedContent) == "" {
+				// 空的嵌套对象，使用自闭合标签
+				xmlBuilder.WriteString(fmt.Sprintf("<%s />", cleanKey))
+			} else {
+				xmlBuilder.WriteString(fmt.Sprintf("<%s>%s</%s>", cleanKey, nestedContent, cleanKey))
+			}
+		case []any:
+			// 数组，处理每个元素
+			for _, item := range v {
+				// 处理数组元素的格式
+				switch iv := item.(type) {
 				case int, int8, int16, int32, int64:
 					itemStr := fmt.Sprintf("%d", iv)
 					xmlBuilder.WriteString(fmt.Sprintf("<%s>%s</%s>", cleanKey, itemStr, cleanKey))
@@ -1226,15 +1227,15 @@ func buildXMLContent(data map[string]any, currentPath string) string {
 				case bool:
 					itemStr := fmt.Sprintf("%t", iv)
 					xmlBuilder.WriteString(fmt.Sprintf("<%s>%s</%s>", cleanKey, itemStr, cleanKey))
-                case map[string]any:
-                    // 嵌套对象，递归处理，路径深入到元素路径
-                    nestedContent := buildXMLContent(iv, currentPath+"/"+key)
-                    if strings.TrimSpace(nestedContent) == "" {
-                        // 空的嵌套对象，使用自闭合标签
-                        xmlBuilder.WriteString(fmt.Sprintf("<%s />", cleanKey))
-                    } else {
-                        xmlBuilder.WriteString(fmt.Sprintf("<%s>%s</%s>", cleanKey, nestedContent, cleanKey))
-                    }
+				case map[string]any:
+					// 嵌套对象，递归处理，路径深入到元素路径
+					nestedContent := buildXMLContent(iv, currentPath+"/"+key)
+					if strings.TrimSpace(nestedContent) == "" {
+						// 空的嵌套对象，使用自闭合标签
+						xmlBuilder.WriteString(fmt.Sprintf("<%s />", cleanKey))
+					} else {
+						xmlBuilder.WriteString(fmt.Sprintf("<%s>%s</%s>", cleanKey, nestedContent, cleanKey))
+					}
 				case nil:
 					// 空元素
 					xmlBuilder.WriteString(fmt.Sprintf("<%s />", cleanKey))

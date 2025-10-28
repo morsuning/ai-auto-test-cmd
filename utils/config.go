@@ -17,18 +17,18 @@ type LLMConfig struct {
 
 // RequestConfig 请求相关配置
 type RequestConfig struct {
-	URL               string   `toml:"url"`                 // 目标URL
-	Method            string   `toml:"method"`              // 请求方法
-	File              string   `toml:"file"`                // CSV测试用例文件
-	SavePath          string   `toml:"save_path"`           // 结果保存路径
-	Timeout           int      `toml:"timeout"`             // 请求超时时间
-	Concurrent        int      `toml:"concurrent"`          // 并发请求数
-	AuthBearer        string   `toml:"auth_bearer"`         // Bearer Token认证
-	AuthBasic         string   `toml:"auth_basic"`          // Basic Auth认证
-	AuthAPIKey        string   `toml:"auth_api_key"`        // API Key认证
-	Headers           []string `toml:"headers"`             // 自定义HTTP头
-	Query             []string `toml:"query"`               // GET请求的URL查询参数
-	IgnoreTLSErrors   bool     `toml:"ignore_tls_errors"`   // 忽略TLS证书验证错误
+	URL             string   `toml:"url"`               // 目标URL
+	Method          string   `toml:"method"`            // 请求方法
+	File            string   `toml:"file"`              // CSV测试用例文件
+	SavePath        string   `toml:"save_path"`         // 结果保存路径
+	Timeout         int      `toml:"timeout"`           // 请求超时时间
+	Concurrent      int      `toml:"concurrent"`        // 并发请求数
+	AuthBearer      string   `toml:"auth_bearer"`       // Bearer Token认证
+	AuthBasic       string   `toml:"auth_basic"`        // Basic Auth认证
+	AuthAPIKey      string   `toml:"auth_api_key"`      // API Key认证
+	Headers         []string `toml:"headers"`           // 自定义HTTP头
+	Query           []string `toml:"query"`             // GET请求的URL查询参数
+	IgnoreTLSErrors bool     `toml:"ignore_tls_errors"` // 忽略TLS证书验证错误
 }
 
 // TestCaseConfig 用例设置
@@ -42,11 +42,11 @@ type TestCaseConfig struct {
 
 // ConstraintsConfig 约束系统配置
 type ConstraintsConfig struct {
-    Enable      *bool                      `toml:"enable"`       // 约束系统开关
-    BuiltinData BuiltinData                `toml:"builtin_data"` // 内置数据
-    Constraints map[string]FieldConstraint // 约束配置（手动解析）
-    CustomTypes map[string]CustomTypeSpec  `toml:"types"`        // 自定义类型
-    CustomDatasets map[string][]string     `toml:"datasets"`     // 自定义数据集
+	Enable         *bool                      `toml:"enable"`       // 约束系统开关
+	BuiltinData    BuiltinData                `toml:"builtin_data"` // 内置数据
+	Constraints    map[string]FieldConstraint // 约束配置（手动解析）
+	CustomTypes    map[string]CustomTypeSpec  `toml:"types"`    // 自定义类型
+	CustomDatasets map[string][]string        `toml:"datasets"` // 自定义数据集
 }
 
 // Config 应用配置结构
@@ -124,20 +124,20 @@ func LoadConfigWithConstraints(configFile string) (*Config, error) {
 	// 如果约束系统启用且配置文件中包含约束配置，设置全局约束配置
 	if constraintsEnabled && (len(config.Constraints.Constraints) > 0 || len(config.Constraints.BuiltinData.FirstNames) > 0 || len(config.BuiltinData.FirstNames) > 0) {
 		// 合并约束配置（优先使用constraints节点下的配置，向后兼容builtin_data）
-        constraints := config.Constraints.Constraints
-        builtinData := config.Constraints.BuiltinData
+		constraints := config.Constraints.Constraints
+		builtinData := config.Constraints.BuiltinData
 
 		// 向后兼容：如果constraints节点下没有builtin_data，使用根节点下的
 		if len(builtinData.FirstNames) == 0 && len(config.BuiltinData.FirstNames) > 0 {
 			builtinData = config.BuiltinData
 		}
 
-        constraintConfig := &ConstraintConfig{
-            Constraints:    constraints,
-            BuiltinData:    builtinData,
-            CustomTypes:    config.Constraints.CustomTypes,
-            CustomDatasets: config.Constraints.CustomDatasets,
-        }
+		constraintConfig := &ConstraintConfig{
+			Constraints:    constraints,
+			BuiltinData:    builtinData,
+			CustomTypes:    config.Constraints.CustomTypes,
+			CustomDatasets: config.Constraints.CustomDatasets,
+		}
 
 		// 验证约束配置
 		if err := ValidateConstraintConfig(constraintConfig); err != nil {
