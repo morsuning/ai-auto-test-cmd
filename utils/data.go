@@ -240,7 +240,7 @@ func XMLToMap(xmlStr string) (map[string]any, error) {
 
 // simplifyXMLMap 简化XML转换后的map结构，保持嵌套层次
 func simplifyXMLMap(data map[string]any) map[string]any {
-	result := make(map[string]any)
+    result := make(map[string]any)
 
 	// 处理根节点
 	for key, value := range data {
@@ -251,94 +251,63 @@ func simplifyXMLMap(data map[string]any) map[string]any {
 		switch v := value.(type) {
 		case map[string]any:
 			// 如果是简单的内容节点 (只有#content和_name)
-			if content, ok := v["#content"]; ok {
-				// 尝试将内容转换为数值类型
-				strContent, isStr := content.(string)
-				if isStr {
-					strContent = strings.TrimSpace(strContent)
-					if strContent != "" {
-						// 尝试转换为整数
-						if intVal, err := strconv.ParseInt(strContent, 10, 64); err == nil {
-							result[key] = intVal
-							continue
-						}
-						// 尝试转换为浮点数
-						if floatVal, err := strconv.ParseFloat(strContent, 64); err == nil {
-							result[key] = floatVal
-							continue
-						}
-						// 尝试转换为布尔值
-						if boolVal, err := strconv.ParseBool(strContent); err == nil {
-							result[key] = boolVal
-							continue
-						}
-						// 保持为字符串
-						result[key] = strContent
-					} else {
-						// 空内容，表示空元素
-						result[key] = nil
-					}
-				} else {
-					result[key] = content
-				}
-			} else if len(v) == 1 && v["_name"] != nil {
-				// 空节点（自闭合标签）
-				result[key] = nil
-			} else {
-				// 递归处理子节点，保持嵌套结构
-				simplified := simplifyXMLMap(v)
-				result[key] = simplified
-			}
-		case []any:
-			// 处理数组
-			array := make([]any, 0, len(v))
-			for _, item := range v {
-				if mapItem, ok := item.(map[string]any); ok {
-					// 如果数组元素是简单的内容节点
-					if content, ok := mapItem["#content"]; ok {
-						// 尝试将内容转换为数值类型
-						strContent, isStr := content.(string)
-						if isStr {
-							strContent = strings.TrimSpace(strContent)
-							if strContent != "" {
-								// 尝试转换为整数
-								if intVal, err := strconv.ParseInt(strContent, 10, 64); err == nil {
-									array = append(array, intVal)
-									continue
-								}
-								// 尝试转换为浮点数
-								if floatVal, err := strconv.ParseFloat(strContent, 64); err == nil {
-									array = append(array, floatVal)
-									continue
-								}
-								// 尝试转换为布尔值
-								if boolVal, err := strconv.ParseBool(strContent); err == nil {
-									array = append(array, boolVal)
-									continue
-								}
-								array = append(array, strContent)
-							} else {
-								array = append(array, nil)
-							}
-						} else {
-							array = append(array, content)
-						}
-					} else {
-						// 递归处理复杂节点
-						simplified := simplifyXMLMap(mapItem)
-						array = append(array, simplified)
-					}
-				} else if item != nil {
-					array = append(array, item)
-				}
-			}
-			result[key] = array
-		default:
-			if v != nil {
-				result[key] = v
-			}
-		}
-	}
+            if content, ok := v["#content"]; ok {
+                // 保持内容为原始字符串，避免数值转换导致前导零丢失
+                strContent, isStr := content.(string)
+                if isStr {
+                    strContent = strings.TrimSpace(strContent)
+                    if strContent != "" {
+                        result[key] = strContent
+                    } else {
+                        // 空内容，表示空元素
+                        result[key] = nil
+                    }
+                } else {
+                    result[key] = content
+                }
+            } else if len(v) == 1 && v["_name"] != nil {
+                // 空节点（自闭合标签）
+                result[key] = nil
+            } else {
+                // 递归处理子节点，保持嵌套结构
+                simplified := simplifyXMLMap(v)
+                result[key] = simplified
+            }
+        case []any:
+            // 处理数组
+            array := make([]any, 0, len(v))
+            for _, item := range v {
+                if mapItem, ok := item.(map[string]any); ok {
+                    // 如果数组元素是简单的内容节点
+                    if content, ok := mapItem["#content"]; ok {
+                        // 保持数组元素为原始字符串
+                        strContent, isStr := content.(string)
+                        if isStr {
+                            strContent = strings.TrimSpace(strContent)
+                            if strContent != "" {
+                                array = append(array, strContent)
+                            } else {
+                                array = append(array, nil)
+                            }
+                        } else {
+                            array = append(array, content)
+                        }
+                    } else {
+                        // 递归处理复杂节点
+                        simplified := simplifyXMLMap(mapItem)
+                        array = append(array, simplified)
+                    }
+                } else if item != nil {
+                    array = append(array, item)
+                }
+            }
+            result[key] = array
+        default:
+            if v != nil {
+                result[key] = v
+            }
+        }
+    }
 
 	return result
 }
@@ -362,33 +331,15 @@ func nodeToMap(node any) any {
 	case reflect.Bool:
 		return v.Bool()
 
-	case reflect.Slice:
-		// 处理字节数组
-		if v.Type().Elem().Kind() == reflect.Uint8 {
-			// 将[]byte转换为字符串并尝试解析
-			s := strings.TrimSpace(string(v.Bytes()))
-			if s == "" {
-				return nil
-			}
-
-			// 尝试解析为整数
-			if i, err := strconv.ParseInt(s, 10, 64); err == nil {
-				return i
-			}
-
-			// 尝试解析为浮点数
-			if f, err := strconv.ParseFloat(s, 64); err == nil {
-				return f
-			}
-
-			// 尝试解析为布尔值
-			if b, err := strconv.ParseBool(s); err == nil {
-				return b
-			}
-
-			// 否则返回字符串
-			return s
-		}
+    case reflect.Slice:
+        // 处理字节数组：保持原始字符串，避免数值转换
+        if v.Type().Elem().Kind() == reflect.Uint8 {
+            s := strings.TrimSpace(string(v.Bytes()))
+            if s == "" {
+                return nil
+            }
+            return s
+        }
 
 		// 处理其他类型的切片
 		result := make([]any, v.Len())

@@ -51,9 +51,6 @@ var llmGenCmd = &cobra.Command{
 		// 从配置文件读取参数（如果指定了配置文件或使用默认配置文件）
 		var config *utils.Config
 		if configFile != "" || baseURL == "" || apiKey == "" || num == 5 || output == "" {
-			if configFile == "" {
-				configFile = "config.toml"
-			}
 			var err error
 			config, err = utils.LoadConfig(configFile)
 			if err != nil && (baseURL == "" || apiKey == "") {
@@ -278,16 +275,16 @@ func init() {
 	llmGenCmd.Flags().StringP("json", "j", "", "JSON格式报文内容")
 
 	// API连接参数组
-	llmGenCmd.Flags().StringP("url", "u", "", "LLM API Base URL（可选，可从配置文件读取）")
-	llmGenCmd.Flags().String("api-key", "", "LLM API Key（可选，可从配置文件读取）")
-	llmGenCmd.Flags().StringP("config", "c", "", "配置文件路径（默认为config.toml）")
+	llmGenCmd.Flags().StringP("url", "u", "", "LLM API Base URL")
+	llmGenCmd.Flags().String("api-key", "", "LLM API Key")
+	llmGenCmd.Flags().StringP("config", "c", "config.toml", "配置文件路径（默认为config.toml）")
 
 	// 生成控制参数组
 	llmGenCmd.Flags().IntP("num", "n", 5, "生成用例数量（默认5）")
-	llmGenCmd.Flags().StringP("prompt", "p", "", "自定义提示词文件路径（可选，文件必须是UTF-8编码）")
+	llmGenCmd.Flags().StringP("prompt", "p", "", "自定义提示词文件路径（文件必须是UTF-8编码）")
 
 	// 输出控制参数组
-	llmGenCmd.Flags().StringP("output", "o", "", "输出文件路径（可选，默认为当前目录下的test_cases.csv）")
+	llmGenCmd.Flags().StringP("output", "o", "", "输出文件路径（默认为当前目录下的test_cases.csv）")
 
 	// 执行控制参数组
 	llmGenCmd.Flags().BoolP("exec", "e", false, "生成测试用例后立即执行")

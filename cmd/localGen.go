@@ -320,7 +320,7 @@ func init() {
 	localGenCmd.Flags().IntP("num", "n", 10, "生成用例数量（默认10）")
 
 	// 配置文件参数组
-	localGenCmd.Flags().StringP("config", "c", "", "配置文件路径（包含约束配置和其他设置）")
+	localGenCmd.Flags().StringP("config", "c", "config.toml", "配置文件路径（包含约束配置和其他设置）")
 
 	// 输出控制参数组
 	localGenCmd.Flags().StringP("output", "o", "", "输出文件路径（默认为当前目录下的test_cases.csv）")
