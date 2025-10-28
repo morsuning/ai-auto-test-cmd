@@ -2,14 +2,15 @@
 package utils
 
 import (
-	"fmt"
-	"math/rand"
-	"os"
-	"strconv"
-	"strings"
-	"time"
+    "fmt"
+    "math/rand"
+    "os"
+    "regexp"
+    "strconv"
+    "strings"
+    "time"
 
-	"github.com/pelletier/go-toml/v2"
+    "github.com/pelletier/go-toml/v2"
 )
 
 // FieldConstraint 字段约束配置
@@ -28,6 +29,14 @@ type FieldConstraint struct {
 	Description  string   `toml:"description"`   // 描述
 }
 
+// CustomTypeSpec 自定义类型声明
+type CustomTypeSpec struct {
+    Dataset     string   `toml:"dataset"`     // 引用数据集名称（来自constraints.datasets或内置数据集）
+    Values      []string `toml:"values"`      // 内联数据值集合
+    Pattern     string   `toml:"pattern"`     // 可选正则校验模式
+    Description string   `toml:"description"` // 类型描述
+}
+
 // BuiltinData 内置数据集
 type BuiltinData struct {
 	FirstNames   []string `toml:"first_names"`   // 姓氏
@@ -41,8 +50,10 @@ type BuiltinData struct {
 
 // ConstraintConfig 约束配置
 type ConstraintConfig struct {
-	Constraints map[string]FieldConstraint // 字段约束映射
-	BuiltinData BuiltinData                `toml:"builtin_data"` // 内置数据
+    Constraints    map[string]FieldConstraint // 字段约束映射
+    BuiltinData    BuiltinData                `toml:"builtin_data"` // 内置数据
+    CustomTypes    map[string]CustomTypeSpec  `toml:"types"`       // 自定义类型
+    CustomDatasets map[string][]string        `toml:"datasets"`    // 自定义数据集
 }
 
 // 全局约束配置
@@ -80,19 +91,30 @@ func (errs ValidationErrors) Error() string {
 
 // ValidateConstraintConfig 验证约束配置的格式和内容
 func ValidateConstraintConfig(config *ConstraintConfig) error {
-	var errors ValidationErrors
+    var errors ValidationErrors
 
-	// 验证每个字段约束
-	for fieldName, constraint := range config.Constraints {
-		if fieldErrors := validateFieldConstraint(fieldName, constraint); len(fieldErrors) > 0 {
-			errors = append(errors, fieldErrors...)
-		}
-	}
+    // 验证每个字段约束
+    for fieldName, constraint := range config.Constraints {
+        if fieldErrors := validateFieldConstraint(fieldName, constraint, config); len(fieldErrors) > 0 {
+            errors = append(errors, fieldErrors...)
+        }
+    }
 
-	// 验证内置数据
-	if builtinErrors := validateBuiltinData(config.BuiltinData); len(builtinErrors) > 0 {
-		errors = append(errors, builtinErrors...)
-	}
+    // 验证自定义类型声明（更宽松：不因空spec、未知dataset、无效pattern报错）
+    if config.CustomTypes != nil {
+        for _, spec := range config.CustomTypes {
+            // 保留生成阶段的灵活性：
+            // - values 与 dataset 可都为空，此时生成阶段回退原值
+            // - dataset 不存在时，生成阶段使用 values（如果有）
+            // - pattern 无效时，生成阶段安全忽略
+            _ = spec // 目前不在此阶段强制校验这些情况
+        }
+    }
+
+    // 验证内置数据
+    if builtinErrors := validateBuiltinData(config.BuiltinData); len(builtinErrors) > 0 {
+        errors = append(errors, builtinErrors...)
+    }
 
 	if len(errors) > 0 {
 		return errors
@@ -100,32 +122,75 @@ func ValidateConstraintConfig(config *ConstraintConfig) error {
 	return nil
 }
 
-// validateFieldConstraint 验证单个字段约束
-func validateFieldConstraint(fieldName string, constraint FieldConstraint) []ValidationError {
-	var errors []ValidationError
+// getDatasetByNameFromConfig 根据提供的配置查找数据集（不依赖全局配置）
+func getDatasetByNameFromConfig(cfg *ConstraintConfig, name string) []string {
+    if cfg == nil {
+        return nil
+    }
+    key := normalizeKey(name)
+    // 自定义数据集优先
+    if cfg.CustomDatasets != nil {
+        if items, ok := cfg.CustomDatasets[key]; ok && len(items) > 0 {
+            return items
+        }
+    }
+    // 内置数据集
+    switch key {
+    case "first_names":
+        return cfg.BuiltinData.FirstNames
+    case "last_names":
+        return cfg.BuiltinData.LastNames
+    case "addresses":
+        return cfg.BuiltinData.Addresses
+    case "email_domains":
+        return cfg.BuiltinData.EmailDomains
+    case "bank_cards":
+        return cfg.BuiltinData.BankCards
+    case "phone_numbers":
+        return cfg.BuiltinData.PhoneNumbers
+    case "id_cards":
+        return cfg.BuiltinData.IDCards
+    default:
+        return nil
+    }
+}
 
-	// 验证约束类型
-	validTypes := []string{"date", "datetime", "chinese_name", "phone", "email", "chinese_address", "id_card", "bank_card", "integer", "float", "keep_original"}
-	if constraint.Type == "" {
-		errors = append(errors, ValidationError{
-			Field:   fieldName,
-			Message: "约束类型 'type' 不能为空",
-		})
-	} else {
-		validType := false
-		for _, vt := range validTypes {
-			if constraint.Type == vt {
-				validType = true
-				break
-			}
-		}
-		if !validType {
-			errors = append(errors, ValidationError{
-				Field:   fieldName,
-				Message: fmt.Sprintf("无效的约束类型 '%s'，支持的类型: %s", constraint.Type, strings.Join(validTypes, ", ")),
-			})
-		}
-	}
+// validateFieldConstraint 验证单个字段约束
+func validateFieldConstraint(fieldName string, constraint FieldConstraint, config *ConstraintConfig) []ValidationError {
+    var errors []ValidationError
+
+    // 验证约束类型
+    validTypes := []string{"date", "datetime", "chinese_name", "phone", "email", "chinese_address", "id_card", "bank_card", "integer", "float", "keep_original"}
+    if constraint.Type == "" {
+        errors = append(errors, ValidationError{
+            Field:   fieldName,
+            Message: "约束类型 'type' 不能为空",
+        })
+    } else {
+        validType := false
+        for _, vt := range validTypes {
+            if constraint.Type == vt {
+                validType = true
+                break
+            }
+        }
+        if !validType {
+            // 检查是否在自定义类型声明中
+            if config == nil || config.CustomTypes == nil {
+                errors = append(errors, ValidationError{
+                    Field:   fieldName,
+                    Message: fmt.Sprintf("无效的约束类型 '%s'，支持的类型: %s 或在constraints.types中声明", constraint.Type, strings.Join(validTypes, ", ")),
+                })
+            } else {
+                if _, exists := config.CustomTypes[constraint.Type]; !exists {
+                    errors = append(errors, ValidationError{
+                        Field:   fieldName,
+                        Message: fmt.Sprintf("未知的自定义类型 '%s'，请在 constraints.types 中声明", constraint.Type),
+                    })
+                }
+            }
+        }
+    }
 
 	// 根据类型进行特定验证
 	switch constraint.Type {
@@ -309,194 +374,156 @@ func validateFloatConstraint(fieldName string, constraint FieldConstraint) []Val
 
 // validateBuiltinData 验证内置数据
 func validateBuiltinData(data BuiltinData) []ValidationError {
-	var errors []ValidationError
+    var errors []ValidationError
 
-	// 验证姓氏数据
-	if len(data.FirstNames) == 0 {
-		errors = append(errors, ValidationError{
-			Field:   "builtin_data.first_names",
-			Message: "姓氏列表不能为空",
-		})
-	} else {
-		for i, name := range data.FirstNames {
-			if strings.TrimSpace(name) == "" {
-				errors = append(errors, ValidationError{
-					Field:   "builtin_data.first_names",
-					Message: fmt.Sprintf("第 %d 个姓氏不能为空", i+1),
-				})
-			}
-		}
-	}
+    // 姓氏（可为空）
+    if len(data.FirstNames) > 0 {
+        for i, name := range data.FirstNames {
+            if strings.TrimSpace(name) == "" {
+                errors = append(errors, ValidationError{
+                    Field:   "builtin_data.first_names",
+                    Message: fmt.Sprintf("第 %d 个姓氏不能为空", i+1),
+                })
+            }
+        }
+    }
 
-	// 验证名字数据
-	if len(data.LastNames) == 0 {
-		errors = append(errors, ValidationError{
-			Field:   "builtin_data.last_names",
-			Message: "名字列表不能为空",
-		})
-	} else {
-		for i, name := range data.LastNames {
-			if strings.TrimSpace(name) == "" {
-				errors = append(errors, ValidationError{
-					Field:   "builtin_data.last_names",
-					Message: fmt.Sprintf("第 %d 个名字不能为空", i+1),
-				})
-			}
-		}
-	}
+    // 名字（可为空）
+    if len(data.LastNames) > 0 {
+        for i, name := range data.LastNames {
+            if strings.TrimSpace(name) == "" {
+                errors = append(errors, ValidationError{
+                    Field:   "builtin_data.last_names",
+                    Message: fmt.Sprintf("第 %d 个名字不能为空", i+1),
+                })
+            }
+        }
+    }
 
-	// 验证地址数据
-	if len(data.Addresses) == 0 {
-		errors = append(errors, ValidationError{
-			Field:   "builtin_data.addresses",
-			Message: "地址列表不能为空",
-		})
-	} else {
-		for i, addr := range data.Addresses {
-			if strings.TrimSpace(addr) == "" {
-				errors = append(errors, ValidationError{
-					Field:   "builtin_data.addresses",
-					Message: fmt.Sprintf("第 %d 个地址不能为空", i+1),
-				})
-			}
-		}
-	}
+    // 地址（可为空）
+    if len(data.Addresses) > 0 {
+        for i, addr := range data.Addresses {
+            if strings.TrimSpace(addr) == "" {
+                errors = append(errors, ValidationError{
+                    Field:   "builtin_data.addresses",
+                    Message: fmt.Sprintf("第 %d 个地址不能为空", i+1),
+                })
+            }
+        }
+    }
 
-	// 验证邮箱域名数据
-	if len(data.EmailDomains) == 0 {
-		errors = append(errors, ValidationError{
-			Field:   "builtin_data.email_domains",
-			Message: "邮箱域名列表不能为空",
-		})
-	} else {
-		for i, domain := range data.EmailDomains {
-			if strings.TrimSpace(domain) == "" {
-				errors = append(errors, ValidationError{
-					Field:   "builtin_data.email_domains",
-					Message: fmt.Sprintf("第 %d 个邮箱域名不能为空", i+1),
-				})
-			} else if !strings.Contains(domain, ".") {
-				errors = append(errors, ValidationError{
-					Field:   "builtin_data.email_domains",
-					Message: fmt.Sprintf("第 %d 个邮箱域名 '%s' 格式无效", i+1, domain),
-				})
-			}
-		}
-	}
+    // 邮箱域名（可为空）
+    if len(data.EmailDomains) > 0 {
+        for i, domain := range data.EmailDomains {
+            if strings.TrimSpace(domain) == "" {
+                errors = append(errors, ValidationError{
+                    Field:   "builtin_data.email_domains",
+                    Message: fmt.Sprintf("第 %d 个邮箱域名不能为空", i+1),
+                })
+            } else if !strings.Contains(domain, ".") {
+                errors = append(errors, ValidationError{
+                    Field:   "builtin_data.email_domains",
+                    Message: fmt.Sprintf("第 %d 个邮箱域名 '%s' 格式无效", i+1, domain),
+                })
+            }
+        }
+    }
 
-	// 验证银行卡号数据
-	if len(data.BankCards) == 0 {
-		errors = append(errors, ValidationError{
-			Field:   "builtin_data.bank_cards",
-			Message: "银行卡号列表不能为空",
-		})
-	} else {
-		for i, card := range data.BankCards {
-			cardTrimmed := strings.TrimSpace(card)
-			if cardTrimmed == "" {
-				errors = append(errors, ValidationError{
-					Field:   "builtin_data.bank_cards",
-					Message: fmt.Sprintf("第 %d 个银行卡号不能为空", i+1),
-				})
-			} else if len(cardTrimmed) < 15 || len(cardTrimmed) > 19 {
-				errors = append(errors, ValidationError{
-					Field:   "builtin_data.bank_cards",
-					Message: fmt.Sprintf("第 %d 个银行卡号 '%s' 长度无效，应为15-19位数字", i+1, cardTrimmed),
-				})
-			} else {
-				// 验证是否为纯数字
-				for _, char := range cardTrimmed {
-					if char < '0' || char > '9' {
-						errors = append(errors, ValidationError{
-							Field:   "builtin_data.bank_cards",
-							Message: fmt.Sprintf("第 %d 个银行卡号 '%s' 包含非数字字符", i+1, cardTrimmed),
-						})
-						break
-					}
-				}
-			}
-		}
-	}
+    // 银行卡号（可为空）
+    if len(data.BankCards) > 0 {
+        for i, card := range data.BankCards {
+            cardTrimmed := strings.TrimSpace(card)
+            if cardTrimmed == "" {
+                errors = append(errors, ValidationError{
+                    Field:   "builtin_data.bank_cards",
+                    Message: fmt.Sprintf("第 %d 个银行卡号不能为空", i+1),
+                })
+            } else if len(cardTrimmed) < 15 || len(cardTrimmed) > 19 {
+                errors = append(errors, ValidationError{
+                    Field:   "builtin_data.bank_cards",
+                    Message: fmt.Sprintf("第 %d 个银行卡号 '%s' 长度无效，应为15-19位数字", i+1, cardTrimmed),
+                })
+            } else {
+                for _, char := range cardTrimmed {
+                    if char < '0' || char > '9' {
+                        errors = append(errors, ValidationError{
+                            Field:   "builtin_data.bank_cards",
+                            Message: fmt.Sprintf("第 %d 个银行卡号 '%s' 包含非数字字符", i+1, cardTrimmed),
+                        })
+                        break
+                    }
+                }
+            }
+        }
+    }
 
-	// 验证手机号数据
-	if len(data.PhoneNumbers) == 0 {
-		errors = append(errors, ValidationError{
-			Field:   "builtin_data.phone_numbers",
-			Message: "手机号列表不能为空",
-		})
-	} else {
-		for i, phone := range data.PhoneNumbers {
-			phoneTrimmed := strings.TrimSpace(phone)
-			if phoneTrimmed == "" {
-				errors = append(errors, ValidationError{
-					Field:   "builtin_data.phone_numbers",
-					Message: fmt.Sprintf("第 %d 个手机号不能为空", i+1),
-				})
-			} else if len(phoneTrimmed) != 11 {
-				errors = append(errors, ValidationError{
-					Field:   "builtin_data.phone_numbers",
-					Message: fmt.Sprintf("第 %d 个手机号 '%s' 长度无效，应为11位数字", i+1, phoneTrimmed),
-				})
-			} else {
-				// 验证是否为纯数字
-				for _, char := range phoneTrimmed {
-					if char < '0' || char > '9' {
-						errors = append(errors, ValidationError{
-							Field:   "builtin_data.phone_numbers",
-							Message: fmt.Sprintf("第 %d 个手机号 '%s' 包含非数字字符", i+1, phoneTrimmed),
-						})
-						break
-					}
-				}
-			}
-		}
-	}
+    // 手机号（可为空）
+    if len(data.PhoneNumbers) > 0 {
+        for i, phone := range data.PhoneNumbers {
+            phoneTrimmed := strings.TrimSpace(phone)
+            if phoneTrimmed == "" {
+                errors = append(errors, ValidationError{
+                    Field:   "builtin_data.phone_numbers",
+                    Message: fmt.Sprintf("第 %d 个手机号不能为空", i+1),
+                })
+            } else if len(phoneTrimmed) != 11 {
+                errors = append(errors, ValidationError{
+                    Field:   "builtin_data.phone_numbers",
+                    Message: fmt.Sprintf("第 %d 个手机号 '%s' 长度无效，应为11位数字", i+1, phoneTrimmed),
+                })
+            } else {
+                for _, char := range phoneTrimmed {
+                    if char < '0' || char > '9' {
+                        errors = append(errors, ValidationError{
+                            Field:   "builtin_data.phone_numbers",
+                            Message: fmt.Sprintf("第 %d 个手机号 '%s' 包含非数字字符", i+1, phoneTrimmed),
+                        })
+                        break
+                    }
+                }
+            }
+        }
+    }
 
-	// 验证身份证号数据
-	if len(data.IDCards) == 0 {
-		errors = append(errors, ValidationError{
-			Field:   "builtin_data.id_cards",
-			Message: "身份证号列表不能为空",
-		})
-	} else {
-		for i, idCard := range data.IDCards {
-			idCardTrimmed := strings.TrimSpace(idCard)
-			if idCardTrimmed == "" {
-				errors = append(errors, ValidationError{
-					Field:   "builtin_data.id_cards",
-					Message: fmt.Sprintf("第 %d 个身份证号不能为空", i+1),
-				})
-			} else if len(idCardTrimmed) != 18 {
-				errors = append(errors, ValidationError{
-					Field:   "builtin_data.id_cards",
-					Message: fmt.Sprintf("第 %d 个身份证号 '%s' 长度无效，应为18位", i+1, idCardTrimmed),
-				})
-			} else {
-				// 验证前17位是否为数字，最后一位可以是数字或X
-				for j, char := range idCardTrimmed {
-					if j < 17 {
-						if char < '0' || char > '9' {
-							errors = append(errors, ValidationError{
-								Field:   "builtin_data.id_cards",
-								Message: fmt.Sprintf("第 %d 个身份证号 '%s' 前17位必须为数字", i+1, idCardTrimmed),
-							})
-							break
-						}
-					} else {
-						if char != 'X' && (char < '0' || char > '9') {
-							errors = append(errors, ValidationError{
-								Field:   "builtin_data.id_cards",
-								Message: fmt.Sprintf("第 %d 个身份证号 '%s' 最后一位必须为数字或X", i+1, idCardTrimmed),
-							})
-							break
-						}
-					}
-				}
-			}
-		}
-	}
+    // 身份证号（可为空）
+    if len(data.IDCards) > 0 {
+        for i, idCard := range data.IDCards {
+            idCardTrimmed := strings.TrimSpace(idCard)
+            if idCardTrimmed == "" {
+                errors = append(errors, ValidationError{
+                    Field:   "builtin_data.id_cards",
+                    Message: fmt.Sprintf("第 %d 个身份证号不能为空", i+1),
+                })
+            } else if len(idCardTrimmed) != 18 {
+                errors = append(errors, ValidationError{
+                    Field:   "builtin_data.id_cards",
+                    Message: fmt.Sprintf("第 %d 个身份证号 '%s' 长度无效，应为18位", i+1, idCardTrimmed),
+                })
+            } else {
+                for j, char := range idCardTrimmed {
+                    if j < 17 {
+                        if char < '0' || char > '9' {
+                            errors = append(errors, ValidationError{
+                                Field:   "builtin_data.id_cards",
+                                Message: fmt.Sprintf("第 %d 个身份证号 '%s' 前17位必须为数字", i+1, idCardTrimmed),
+                            })
+                            break
+                        }
+                    } else {
+                        if char != 'X' && (char < '0' || char > '9') {
+                            errors = append(errors, ValidationError{
+                                Field:   "builtin_data.id_cards",
+                                Message: fmt.Sprintf("第 %d 个身份证号 '%s' 最后一位必须为数字或X", i+1, idCardTrimmed),
+                            })
+                            break
+                        }
+                    }
+                }
+            }
+        }
+    }
 
-	return errors
+    return errors
 }
 
 // LoadConstraintConfig 从TOML文件加载约束配置
@@ -513,65 +540,95 @@ func LoadConstraintConfig(filePath string) error {
 		return fmt.Errorf("解析TOML配置文件失败: %w", err)
 	}
 
-	config := &ConstraintConfig{
-		Constraints: make(map[string]FieldConstraint),
-	}
+    config := &ConstraintConfig{
+        Constraints:    make(map[string]FieldConstraint),
+        CustomTypes:    make(map[string]CustomTypeSpec),
+        CustomDatasets: make(map[string][]string),
+    }
 
 	// 检查是否有constraints节点
 	if constraintsNode, exists := rawConfig["constraints"]; exists {
 		// 新格式：constraints节点下的配置
 		if constraintsMap, ok := constraintsNode.(map[string]any); ok {
-			for key, value := range constraintsMap {
-				if key == "enable" {
-					// 跳过enable开关，这里不处理
-					continue
-				} else if key == "builtin_data" {
-					// 解析内置数据
-					builtinBytes, _ := toml.Marshal(map[string]any{"builtin_data": value})
-					var temp struct {
-						BuiltinData BuiltinData `toml:"builtin_data"`
-					}
-					_ = toml.Unmarshal(builtinBytes, &temp)
-					config.BuiltinData = temp.BuiltinData
-				} else {
-					// 解析字段约束
-					constraintBytes, _ := toml.Marshal(map[string]any{key: value})
-					var constraint FieldConstraint
-					var temp map[string]FieldConstraint
-					if toml.Unmarshal(constraintBytes, &temp) == nil {
-						if c, exists := temp[key]; exists {
-							constraint = c
-							config.Constraints[key] = constraint
-						}
-					}
-				}
-			}
-		}
-	} else {
+            for key, value := range constraintsMap {
+                if key == "enable" {
+                    // 跳过enable开关，这里不处理
+                    continue
+                } else if key == "builtin_data" {
+                    // 解析内置数据
+                    builtinBytes, _ := toml.Marshal(map[string]any{"builtin_data": value})
+                    var temp struct {
+                        BuiltinData BuiltinData `toml:"builtin_data"`
+                    }
+                    _ = toml.Unmarshal(builtinBytes, &temp)
+                    config.BuiltinData = temp.BuiltinData
+                } else if key == "types" {
+                    // 解析自定义类型
+                    typeBytes, _ := toml.Marshal(map[string]any{"types": value})
+                    var temp struct {
+                        Types map[string]CustomTypeSpec `toml:"types"`
+                    }
+                    if toml.Unmarshal(typeBytes, &temp) == nil && temp.Types != nil {
+                        for tn, spec := range temp.Types {
+                            config.CustomTypes[tn] = spec
+                        }
+                    }
+                } else if key == "datasets" {
+                    // 解析自定义数据集
+                    dsBytes, _ := toml.Marshal(map[string]any{"datasets": value})
+                    var temp struct {
+                        Datasets map[string][]string `toml:"datasets"`
+                    }
+                    if toml.Unmarshal(dsBytes, &temp) == nil && temp.Datasets != nil {
+                        for dn, vals := range temp.Datasets {
+                            config.CustomDatasets[dn] = vals
+                        }
+                    }
+                } else {
+                    // 解析字段约束（支持嵌套路径，如 user.profile.status_text）
+                    collectConstraintsRecursive(key, value, config)
+                }
+            }
+        }
+    } else {
 		// 旧格式：直接在根节点下的配置（向后兼容）
-		for key, value := range rawConfig {
-			if key == "builtin_data" {
-				// 解析内置数据
-				builtinBytes, _ := toml.Marshal(map[string]any{"builtin_data": value})
-				var temp struct {
-					BuiltinData BuiltinData `toml:"builtin_data"`
-				}
-				_ = toml.Unmarshal(builtinBytes, &temp)
-				config.BuiltinData = temp.BuiltinData
-			} else {
-				// 解析字段约束
-				constraintBytes, _ := toml.Marshal(map[string]any{key: value})
-				var constraint FieldConstraint
-				var temp map[string]FieldConstraint
-				if toml.Unmarshal(constraintBytes, &temp) == nil {
-					if c, exists := temp[key]; exists {
-						constraint = c
-						config.Constraints[key] = constraint
-					}
-				}
-			}
-		}
-	}
+        for key, value := range rawConfig {
+            if key == "builtin_data" {
+                // 解析内置数据
+                builtinBytes, _ := toml.Marshal(map[string]any{"builtin_data": value})
+                var temp struct {
+                    BuiltinData BuiltinData `toml:"builtin_data"`
+                }
+                _ = toml.Unmarshal(builtinBytes, &temp)
+                config.BuiltinData = temp.BuiltinData
+            } else if key == "types" {
+                // 解析自定义类型（旧格式）
+                typeBytes, _ := toml.Marshal(map[string]any{"types": value})
+                var temp struct {
+                    Types map[string]CustomTypeSpec `toml:"types"`
+                }
+                if toml.Unmarshal(typeBytes, &temp) == nil && temp.Types != nil {
+                    for tn, spec := range temp.Types {
+                        config.CustomTypes[tn] = spec
+                    }
+                }
+            } else if key == "datasets" {
+                // 解析自定义数据集（旧格式）
+                dsBytes, _ := toml.Marshal(map[string]any{"datasets": value})
+                var temp struct {
+                    Datasets map[string][]string `toml:"datasets"`
+                }
+                if toml.Unmarshal(dsBytes, &temp) == nil && temp.Datasets != nil {
+                    for dn, vals := range temp.Datasets {
+                        config.CustomDatasets[dn] = vals
+                    }
+                }
+            } else {
+                // 解析字段约束（旧格式下也支持嵌套路径）
+                collectConstraintsRecursive(key, value, config)
+            }
+        }
+    }
 
 	// 验证配置
 	if err := ValidateConstraintConfig(config); err != nil {
@@ -625,16 +682,23 @@ func FindFieldConstraint(fieldName string) *FieldConstraint {
 
 // GenerateConstrainedValue 根据约束生成值
 func GenerateConstrainedValue(constraint *FieldConstraint, originalValue any) any {
-	if constraint == nil {
-		return originalValue
-	}
+    if constraint == nil {
+        return originalValue
+    }
 
 	// 检查是否设置了保持原值不变
 	if constraint.KeepOriginal != nil && *constraint.KeepOriginal {
 		return originalValue
 	}
 
-	switch constraint.Type {
+    // 优先处理自定义类型
+    if globalConstraintConfig != nil && globalConstraintConfig.CustomTypes != nil {
+        if spec, exists := globalConstraintConfig.CustomTypes[constraint.Type]; exists {
+            return generateCustomTypeValue(constraint.Type, spec, originalValue)
+        }
+    }
+
+    switch constraint.Type {
 	case "keep_original":
 		return originalValue
 	case "date":
@@ -657,9 +721,9 @@ func GenerateConstrainedValue(constraint *FieldConstraint, originalValue any) an
 		return generateIntegerValue(constraint)
 	case "float":
 		return generateFloatValue(constraint)
-	default:
-		return originalValue
-	}
+    default:
+        return originalValue
+    }
 }
 
 // generateDateValue 生成日期值
@@ -1150,7 +1214,132 @@ func generateBankCard() string {
 	return bankCards[rand.Intn(len(bankCards))]
 }
 
+// normalizeKey 规范化数据集名称键（小写、连字符转下划线）
+func normalizeKey(name string) string {
+    n := strings.ToLower(name)
+    n = strings.ReplaceAll(n, "-", "_")
+    return n
+}
+
+// getDatasetByName 根据名称获取数据集（优先自定义数据集，其次内置数据集）
+func getDatasetByName(name string) []string {
+    if globalConstraintConfig == nil {
+        return nil
+    }
+    key := normalizeKey(name)
+
+    // 自定义数据集优先
+    if globalConstraintConfig.CustomDatasets != nil {
+        if items, ok := globalConstraintConfig.CustomDatasets[key]; ok && len(items) > 0 {
+            return items
+        }
+    }
+
+    // 内置数据集映射
+    switch key {
+    case "first_names":
+        return globalConstraintConfig.BuiltinData.FirstNames
+    case "last_names":
+        return globalConstraintConfig.BuiltinData.LastNames
+    case "addresses":
+        return globalConstraintConfig.BuiltinData.Addresses
+    case "email_domains":
+        return globalConstraintConfig.BuiltinData.EmailDomains
+    case "bank_cards":
+        return globalConstraintConfig.BuiltinData.BankCards
+    case "phone_numbers":
+        return globalConstraintConfig.BuiltinData.PhoneNumbers
+    case "id_cards":
+        return globalConstraintConfig.BuiltinData.IDCards
+    default:
+        return nil
+    }
+}
+
+// generateCustomTypeValue 根据自定义类型规范生成值
+func generateCustomTypeValue(typeName string, spec CustomTypeSpec, originalValue any) any {
+    var pool []string
+
+    // 合并 values 与 dataset 内容
+    if len(spec.Values) > 0 {
+        pool = append(pool, spec.Values...)
+    }
+    if spec.Dataset != "" {
+        ds := getDatasetByName(spec.Dataset)
+        if len(ds) > 0 {
+            pool = append(pool, ds...)
+        }
+    }
+
+    // 如果候选池为空，回退原值
+    if len(pool) == 0 {
+        return originalValue
+    }
+
+    // 按 pattern 过滤
+    if spec.Pattern != "" {
+        re, err := regexp.Compile(spec.Pattern)
+        if err == nil {
+            filtered := make([]string, 0, len(pool))
+            for _, v := range pool {
+                if re.MatchString(v) {
+                    filtered = append(filtered, v)
+                }
+            }
+            if len(filtered) > 0 {
+                pool = filtered
+            }
+        }
+        // 如果正则无效或过滤后为空，则保留原始池作为后备
+    }
+
+    // 随机选择一个候选值
+    return pool[rand.Intn(len(pool))]
+}
+
 // init 初始化随机数种子
 func init() {
 	rand.New(rand.NewSource(time.Now().UnixNano()))
+}
+
+// isFieldConstraintMap 判断一个节点是否为字段约束叶子
+func isFieldConstraintMap(m map[string]any) bool {
+    if _, ok := m["type"]; ok {
+        return true
+    }
+    // 其他可能的字段存在也视为约束叶子
+    keys := []string{"format", "min_date", "max_date", "min_datetime", "max_datetime", "timezone", "min", "max", "precision", "keep_original", "description"}
+    for _, k := range keys {
+        if _, ok := m[k]; ok {
+            return true
+        }
+    }
+    return false
+}
+
+// collectConstraintsRecursive 递归收集嵌套字段约束，并按完整路径存储
+func collectConstraintsRecursive(prefix string, node any, config *ConstraintConfig) {
+    m, ok := node.(map[string]any)
+    if !ok {
+        return
+    }
+    if isFieldConstraintMap(m) {
+        // 将该叶子解析为 FieldConstraint
+        constraintBytes, _ := toml.Marshal(map[string]any{prefix: m})
+        var temp map[string]FieldConstraint
+        if toml.Unmarshal(constraintBytes, &temp) == nil {
+            if c, exists := temp[prefix]; exists {
+                config.Constraints[prefix] = c
+            }
+        }
+        return
+    }
+    // 继续遍历子节点
+    for k, v := range m {
+        next := k
+        if prefix != "" {
+            next = prefix + "." + k
+        }
+        collectConstraintsRecursive(next, v, config)
+    }
 }

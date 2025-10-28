@@ -42,9 +42,11 @@ type TestCaseConfig struct {
 
 // ConstraintsConfig 约束系统配置
 type ConstraintsConfig struct {
-	Enable      *bool                      `toml:"enable"`       // 约束系统开关
-	BuiltinData BuiltinData                `toml:"builtin_data"` // 内置数据
-	Constraints map[string]FieldConstraint // 约束配置（手动解析）
+    Enable      *bool                      `toml:"enable"`       // 约束系统开关
+    BuiltinData BuiltinData                `toml:"builtin_data"` // 内置数据
+    Constraints map[string]FieldConstraint // 约束配置（手动解析）
+    CustomTypes map[string]CustomTypeSpec  `toml:"types"`        // 自定义类型
+    CustomDatasets map[string][]string     `toml:"datasets"`     // 自定义数据集
 }
 
 // Config 应用配置结构
@@ -86,22 +88,22 @@ func LoadConfig(configFile string) (*Config, error) {
 	// 手动解析constraints节点
 	if constraintsNode, exists := rawConfig["constraints"]; exists {
 		if constraintsMap, ok := constraintsNode.(map[string]any); ok {
+			// 初始化约束映射
 			config.Constraints.Constraints = make(map[string]FieldConstraint)
 
 			for key, value := range constraintsMap {
-				if key == "enable" || key == "builtin_data" {
-					// 跳过已经解析的字段
+				// 跳过开关与在结构体中已由toml自动解析的节点
+				if key == "enable" || key == "builtin_data" || key == "types" || key == "datasets" {
 					continue
 				}
 
-				// 解析字段约束
-				constraintBytes, _ := toml.Marshal(map[string]any{key: value})
-				var temp map[string]FieldConstraint
-				if toml.Unmarshal(constraintBytes, &temp) == nil {
-					if constraint, exists := temp[key]; exists {
-						config.Constraints.Constraints[key] = constraint
-					}
-				}
+				// 递归解析字段约束（支持嵌套路径，如 user.profile.status_text）
+				collectConstraintsRecursive(key, value, &ConstraintConfig{
+					Constraints:    config.Constraints.Constraints,
+					BuiltinData:    config.Constraints.BuiltinData,
+					CustomTypes:    config.Constraints.CustomTypes,
+					CustomDatasets: config.Constraints.CustomDatasets,
+				})
 			}
 		}
 	}
@@ -122,18 +124,20 @@ func LoadConfigWithConstraints(configFile string) (*Config, error) {
 	// 如果约束系统启用且配置文件中包含约束配置，设置全局约束配置
 	if constraintsEnabled && (len(config.Constraints.Constraints) > 0 || len(config.Constraints.BuiltinData.FirstNames) > 0 || len(config.BuiltinData.FirstNames) > 0) {
 		// 合并约束配置（优先使用constraints节点下的配置，向后兼容builtin_data）
-		constraints := config.Constraints.Constraints
-		builtinData := config.Constraints.BuiltinData
+        constraints := config.Constraints.Constraints
+        builtinData := config.Constraints.BuiltinData
 
 		// 向后兼容：如果constraints节点下没有builtin_data，使用根节点下的
 		if len(builtinData.FirstNames) == 0 && len(config.BuiltinData.FirstNames) > 0 {
 			builtinData = config.BuiltinData
 		}
 
-		constraintConfig := &ConstraintConfig{
-			Constraints: constraints,
-			BuiltinData: builtinData,
-		}
+        constraintConfig := &ConstraintConfig{
+            Constraints:    constraints,
+            BuiltinData:    builtinData,
+            CustomTypes:    config.Constraints.CustomTypes,
+            CustomDatasets: config.Constraints.CustomDatasets,
+        }
 
 		// 验证约束配置
 		if err := ValidateConstraintConfig(constraintConfig); err != nil {

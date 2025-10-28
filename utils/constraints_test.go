@@ -258,8 +258,8 @@ func TestBankCardConstraintValidation(t *testing.T) {
 		Type: "bank_card",
 	}
 
-	errors := validateFieldConstraint("test_bank_card", constraint)
-	if len(errors) != 0 {
-		t.Errorf("有效的银行卡约束验证失败: %v", errors)
-	}
+    errors := validateFieldConstraint("test_bank_card", constraint, nil)
+    if len(errors) != 0 {
+        t.Errorf("有效的银行卡约束验证失败: %v", errors)
+    }
 }

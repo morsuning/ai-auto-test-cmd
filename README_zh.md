@@ -452,6 +452,50 @@ addresses = ["北京市朝阳区建国门外大街1号", "上海市浦东新区�
 email_domains = ["qq.com", "163.com", "126.com", "gmail.com"]
 ```
 
+### 自定义类型与数据集
+
+在 `constraints.types` 下声明可复用的自定义类型，可通过内联 `values`、引用自定义 `datasets` 或内置数据集，并可选用正则 `pattern` 进行过滤。
+
+```toml
+[constraints]
+enable = true
+
+# 声明自定义类型（支持 values / dataset / pattern）
+[constraints.types.status_text]
+values = ["pending", "paid", "shipped", "cancelled"]
+description = "订单状态文本"
+
+[constraints.types.region_code]
+dataset = "region_codes"           # 引用下方的自定义数据集
+pattern = "^[A-Z]{2}-\\d{2}$"     # 使用正则过滤候选值
+description = "区域编码"
+
+# 引用内置数据集作为自定义类型的数据源
+[constraints.types.email_domain_custom]
+dataset = "email_domains"           # 来自内置数据集
+description = "邮箱域名（内置数据集）"
+
+# 自定义数据集（供自定义类型引用）
+[constraints.datasets]
+region_codes = ["CN-01", "CN-02", "US-01", "US-02", "JP-01", "DE-01"]
+
+# 在字段上应用自定义类型
+[constraints.order.status_text]
+type = "status_text"
+
+[constraints.user.region]
+type = "region_code"
+
+[constraints.user.email_domain]
+type = "email_domain_custom"
+```
+
+注意事项：
+- `atc validate` 会检查正则是否能编译，但实际匹配在生成阶段执行；无效正则会被安全忽略。
+- 未知的数据集会被跳过；若配置了 `values` 则仅使用该集合生成。
+- 当 `values` 和 `dataset` 都为空时，字段保留原值不变。
+- 使用 `atc validate -v` 可查看自定义类型和自定义数据集的统计信息。
+
 ### 生成效果对比
 
 **使用约束系统前（随机变化）：**

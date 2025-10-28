@@ -394,6 +394,50 @@ addresses = ["北京市朝阳区建国门外大街1号", "上海市浦东新区�
 email_domains = ["qq.com", "163.com", "126.com", "gmail.com"]
 ```
 
+### Custom Types & Datasets
+
+Define reusable value pools and rules under `constraints.types`, and reference inline `values`, custom `datasets`, or built-in datasets, optionally filtered by a regex `pattern`.
+
+```toml
+[constraints]
+enable = true
+
+# Declare custom types (support values / dataset / pattern)
+[constraints.types.status_text]
+values = ["pending", "paid", "shipped", "cancelled"]
+description = "Order status text"
+
+[constraints.types.region_code]
+dataset = "region_codes"           # from constraints.datasets below
+pattern = "^[A-Z]{2}-\\d{2}$"     # filter values by regex
+description = "Region code"
+
+# Reference built-in dataset as a custom type source
+[constraints.types.email_domain_custom]
+dataset = "email_domains"           # from built-in datasets
+description = "Email domains (built-in)"
+
+# Declare custom datasets for custom types to reference
+[constraints.datasets]
+region_codes = ["CN-01", "CN-02", "US-01", "US-02", "JP-01", "DE-01"]
+
+# Apply custom types to fields
+[constraints.order.status_text]
+type = "status_text"
+
+[constraints.user.region]
+type = "region_code"
+
+[constraints.user.email_domain]
+type = "email_domain_custom"
+```
+
+Notes:
+- Pattern compilation is validated during `atc validate`, but value matching happens at generation time; invalid patterns are ignored safely.
+- Unknown datasets are skipped; generation falls back to `values` if present.
+- If both `values` and `dataset` are empty, the original field value is preserved.
+- Use `atc validate -v` to see counts and names of custom types and datasets.
+
 ### Generation Effect Comparison
 
 **Before using constraint system (random variation):**

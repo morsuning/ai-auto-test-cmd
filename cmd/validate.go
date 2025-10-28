@@ -135,6 +135,24 @@ func showConfigStats(config *utils.Config) {
 		}
 	}
 
+	// 自定义类型统计
+	if len(config.Constraints.CustomTypes) > 0 {
+		fmt.Printf("    - 自定义类型总数: %d\n", len(config.Constraints.CustomTypes))
+		// 在详细模式下展示类型名称
+		if verbose {
+			fmt.Println("    - 自定义类型名称:")
+			shown := 0
+			for typeName := range config.Constraints.CustomTypes {
+				fmt.Printf("      • %s\n", typeName)
+				shown++
+				if shown >= 10 {
+					fmt.Println("      • ...(更多略)")
+					break
+				}
+			}
+		}
+	}
+
 	// 统计内置数据（优先使用constraints节点下的，向后兼容根节点下的）
 	builtinData := config.Constraints.BuiltinData
 	if len(builtinData.FirstNames) == 0 && len(config.BuiltinData.FirstNames) > 0 {
@@ -166,6 +184,14 @@ func showConfigStats(config *utils.Config) {
 		}
 		if len(builtinData.IDCards) > 0 {
 			fmt.Printf("    - 身份证号: %d 个\n", len(builtinData.IDCards))
+		}
+	}
+
+	// 自定义数据集统计
+	if len(config.Constraints.CustomDatasets) > 0 {
+		fmt.Println("  • 自定义数据集:")
+		for name, items := range config.Constraints.CustomDatasets {
+			fmt.Printf("    - %s: %d 个\n", name, len(items))
 		}
 	}
 
