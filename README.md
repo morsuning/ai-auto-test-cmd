@@ -1,6 +1,6 @@
 # ATC - API Automation Testing Command Line Tool
 
-[![Go Version](https://img.shields.io/badge/Go-1.24+-blue.svg)](https://golang.org/)
+[![Go Version](https://img.shields.io/badge/Go-1.25+-blue.svg)](https://golang.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](#installation)
 
@@ -437,6 +437,37 @@ Notes:
 - Unknown datasets are skipped; generation falls back to `values` if present.
 - If both `values` and `dataset` are empty, the original field value is preserved.
 - Use `atc validate -v` to see counts and names of custom types and datasets.
+
+### Composite Constraints
+
+Use composite constraints to enforce correlated values across multiple fields (e.g., `province` with `city`). A single row from `data` is chosen per test case and applied consistently across all matching fields.
+
+Example：
+
+```toml
+[constraints]
+enable = true
+
+[constraints.composite_address]
+type = "composite"
+fields = ["province", "city"]
+data = [["上海", "上海市"], ["北京", "北京市"], ["广东", "广州市"]]
+description = "Province and city must be chosen together"
+```
+
+Behavior：
+- Select one `data` row per test case, then override all matching fields.
+- Matches by the last segment of the field path; works in nested objects and array elements.
+- Field name normalization: lowercase and `-` → `_` (e.g., `city-name` ≈ `city_name`).
+
+Validation：
+- `fields` must be non-empty and unique; `data` must be non-empty.
+- Each `data` row length must equal the number of `fields`.
+- Invalid configs are reported by `atc validate` with detailed errors.
+
+Notes：
+- Within a single test case, all occurrences of composite fields use the same chosen pair/group to preserve consistency.
+- Composite overrides apply to basic leaf fields; under `keep_original` on a parent object, child fields still honor composite overrides but otherwise keep their original values.
 
 ### Generation Effect Comparison
 

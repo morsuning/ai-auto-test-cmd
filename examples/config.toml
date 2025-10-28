@@ -22,7 +22,9 @@ positive_example = '''
     "id_card": "110101199001011234",
     "bank_card": "6222021234567890",
     "profile": { "status_text": "pending" },
-    "domain": "qq.com"
+    "domain": "qq.com",
+    "province": "上海",
+    "city": "上海市"
   },
   "order": {
     "amount": 199.99,
@@ -55,6 +57,8 @@ positive_example = '''
 #       <status_text>pending</status_text>
 #     </profile>
 #     <domain>qq.com</domain>
+#     <province>上海</province>
+#     <city>上海市</city>
 #   </user>
 #   <order>
 #     <amount>199.99</amount>
@@ -215,6 +219,14 @@ description = "订单创建时间（嵌套路径）"
 [constraints.order.region]
 type = "region_union"
 description = "区域编码（自定义类型：values+dataset+pattern）"
+
+# 组合约束示例：多字段相关性（例如省份与城市需要成对出现）
+# fields中声明了正例字段中需要组合的所有字段，data为该组合的多组数据，组内字段顺序和fields中声明的顺序一致
+[constraints.composite_address]
+type = "composite"
+fields = ["user.province", "user.city"]
+data = [["上海", "上海市"], ["北京", "北京市"], ["广东", "广州市"]]
+description = "组合约束：province 与 city 一组选择，保持一致性"
 
 # ----------------------
 # 通用内置约束示例

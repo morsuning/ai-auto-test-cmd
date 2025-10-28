@@ -84,6 +84,8 @@ type = "region_code"
     if err != nil {
         t.Fatalf("加载配置失败: %v", err)
     }
+    // 清理全局约束，防止影响其他测试
+    t.Cleanup(func(){ globalConstraintConfig = nil })
     c := FindFieldConstraint("region")
     if c == nil {
         t.Fatalf("未找到字段约束: region")
@@ -277,6 +279,8 @@ type = "status_text"
         },
     }
 
+    // 重置字段顺序以避免使用之前解析的顺序
+    originalKeyOrder = nil
     cases := GenerateTestCasesWithVariationRate(data, 3, 0.0, true)
     allowedStatus := map[string]bool{"pending": true, "paid": true, "shipped": true}
     allowedRegion := map[string]bool{"US-01": true, "CN-01": true}

@@ -15,18 +15,21 @@ import (
 
 // FieldConstraint 字段约束配置
 type FieldConstraint struct {
-	Type         string   `toml:"type"`          // 约束类型
-	Format       string   `toml:"format"`        // 格式（用于日期等）
-	MinDate      string   `toml:"min_date"`      // 最小日期
-	MaxDate      string   `toml:"max_date"`      // 最大日期
-	MinDatetime  string   `toml:"min_datetime"`  // 最小日期时间（RFC 3339 Extended格式）
-	MaxDatetime  string   `toml:"max_datetime"`  // 最大日期时间（RFC 3339 Extended格式）
-	Timezone     string   `toml:"timezone"`      // 时区（如：+08:00, UTC, Asia/Shanghai）
-	Min          *float64 `toml:"min"`           // 最小值
-	Max          *float64 `toml:"max"`           // 最大值
-	Precision    *int     `toml:"precision"`     // 精度（小数位数）
-	KeepOriginal *bool    `toml:"keep_original"` // 是否保持原值不变
-	Description  string   `toml:"description"`   // 描述
+    Type         string   `toml:"type"`          // 约束类型
+    Format       string   `toml:"format"`        // 格式（用于日期等）
+    MinDate      string   `toml:"min_date"`      // 最小日期
+    MaxDate      string   `toml:"max_date"`      // 最大日期
+    MinDatetime  string   `toml:"min_datetime"`  // 最小日期时间（RFC 3339 Extended格式）
+    MaxDatetime  string   `toml:"max_datetime"`  // 最大日期时间（RFC 3339 Extended格式）
+    Timezone     string   `toml:"timezone"`      // 时区（如：+08:00, UTC, Asia/Shanghai）
+    Min          *float64 `toml:"min"`           // 最小值
+    Max          *float64 `toml:"max"`           // 最大值
+    Precision    *int     `toml:"precision"`     // 精度（小数位数）
+    KeepOriginal *bool    `toml:"keep_original"` // 是否保持原值不变
+    Description  string   `toml:"description"`   // 描述
+    // 组合约束专用字段
+    Fields       []string   `toml:"fields"`       // 组合约束关联的字段名列表
+    Data         [][]string `toml:"data"`         // 组合约束的数据集，每行与 fields 一一对应
 }
 
 // CustomTypeSpec 自定义类型声明
@@ -160,7 +163,7 @@ func validateFieldConstraint(fieldName string, constraint FieldConstraint, confi
     var errors []ValidationError
 
     // 验证约束类型
-    validTypes := []string{"date", "datetime", "chinese_name", "phone", "email", "chinese_address", "id_card", "bank_card", "integer", "float", "keep_original"}
+    validTypes := []string{"date", "datetime", "chinese_name", "phone", "email", "chinese_address", "id_card", "bank_card", "integer", "float", "keep_original", "composite"}
     if constraint.Type == "" {
         errors = append(errors, ValidationError{
             Field:   fieldName,
@@ -202,9 +205,57 @@ func validateFieldConstraint(fieldName string, constraint FieldConstraint, confi
 		errors = append(errors, validateIntegerConstraint(fieldName, constraint)...)
 	case "float":
 		errors = append(errors, validateFloatConstraint(fieldName, constraint)...)
+    case "composite":
+        errors = append(errors, validateCompositeConstraint(fieldName, constraint)...)
 	}
 
 	return errors
+}
+
+// validateCompositeConstraint 验证组合约束的数据形状和字段配置
+func validateCompositeConstraint(fieldName string, constraint FieldConstraint) []ValidationError {
+    var errors []ValidationError
+    // fields 必须存在且非空
+    if len(constraint.Fields) == 0 {
+        errors = append(errors, ValidationError{
+            Field:   fieldName,
+            Message: "组合约束需要配置非空的 'fields' 列表",
+        })
+    }
+    // data 必须存在且非空
+    if len(constraint.Data) == 0 {
+        errors = append(errors, ValidationError{
+            Field:   fieldName,
+            Message: "组合约束需要配置非空的 'data' 数据集",
+        })
+    }
+    // 字段重复校验
+    if len(constraint.Fields) > 0 {
+        seen := make(map[string]bool)
+        for _, f := range constraint.Fields {
+            key := normalizeKey(f)
+            if seen[key] {
+                errors = append(errors, ValidationError{
+                    Field:   fieldName,
+                    Message: fmt.Sprintf("组合约束的字段 '%s' 重复", f),
+                })
+            }
+            seen[key] = true
+        }
+    }
+    // 每行数据长度必须与 fields 一致
+    expected := len(constraint.Fields)
+    if expected > 0 {
+        for i, row := range constraint.Data {
+            if len(row) != expected {
+                errors = append(errors, ValidationError{
+                    Field:   fieldName,
+                    Message: fmt.Sprintf("组合约束第 %d 行数据列数(%d)与字段数(%d)不匹配", i, len(row), expected),
+                })
+            }
+        }
+    }
+    return errors
 }
 
 // validateDateConstraint 验证日期约束
@@ -694,7 +745,7 @@ func GenerateConstrainedValue(constraint *FieldConstraint, originalValue any) an
     // 优先处理自定义类型
     if globalConstraintConfig != nil && globalConstraintConfig.CustomTypes != nil {
         if spec, exists := globalConstraintConfig.CustomTypes[constraint.Type]; exists {
-            return generateCustomTypeValue(constraint.Type, spec, originalValue)
+            return generateCustomTypeValue(spec, originalValue)
         }
     }
 
@@ -721,6 +772,9 @@ func GenerateConstrainedValue(constraint *FieldConstraint, originalValue any) an
 		return generateIntegerValue(constraint)
 	case "float":
 		return generateFloatValue(constraint)
+    case "composite":
+        // 组合约束由生成流程统一处理（以组为单位选择），此处保持原值
+        return originalValue
     default:
         return originalValue
     }
@@ -1257,7 +1311,7 @@ func getDatasetByName(name string) []string {
 }
 
 // generateCustomTypeValue 根据自定义类型规范生成值
-func generateCustomTypeValue(typeName string, spec CustomTypeSpec, originalValue any) any {
+func generateCustomTypeValue(spec CustomTypeSpec, originalValue any) any {
     var pool []string
 
     // 合并 values 与 dataset 内容

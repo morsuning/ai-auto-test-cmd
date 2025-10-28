@@ -624,7 +624,7 @@ func extractJSONKeys(jsonStr string) []string {
 
 // GenerateTestCasesWithVariationRate 生成测试用例（支持自定义随机化因子）
 func GenerateTestCasesWithVariationRate(data map[string]any, count int, variationRate float64, useConstraints bool) []map[string]any {
-	testCases := make([]map[string]any, count)
+    testCases := make([]map[string]any, count)
 
 	// 使用已经保存的原始字段顺序
 	keys := originalKeyOrder
@@ -681,21 +681,26 @@ func GenerateTestCasesWithVariationRate(data map[string]any, count int, variatio
 		}
 	}
 
-	// 生成指定数量的测试用例
-	for i := 0; i < count; i++ {
-		testCase := make(map[string]any)
-		// 按原始顺序处理每个字段
-		for _, key := range keys {
-			if useConstraints {
-				// 使用带约束的变化生成
-				testCase[key] = generateVariationWithConstraints(data[key], key, variationRate)
-			} else {
-				// 不使用约束，使用原始变化逻辑
-				testCase[key] = generateVariation(data[key], variationRate)
-			}
-		}
-		testCases[i] = testCase
-	}
+    // 生成指定数量的测试用例
+    for i := 0; i < count; i++ {
+        testCase := make(map[string]any)
+        // 为每个测试用例提前选择组合约束的分组，并构建字段覆盖表
+        var compositeOverrides map[string]string
+        if useConstraints {
+            compositeOverrides = buildCompositeOverrides()
+        }
+        // 按原始顺序处理每个字段
+        for _, key := range keys {
+            if useConstraints {
+                // 使用带约束的变化生成
+                testCase[key] = generateVariationWithConstraints(data[key], key, variationRate, compositeOverrides)
+            } else {
+                // 不使用约束，使用原始变化逻辑
+                testCase[key] = generateVariation(data[key], variationRate)
+            }
+        }
+        testCases[i] = testCase
+    }
 
 	// 保存类型信息到全局变量（字段顺序已在ParseJSON中设置）
 	originalValueTypes = types
@@ -834,64 +839,145 @@ func generateVariation(value any, variationRate float64) any {
 }
 
 // generateVariationWithConstraints 根据约束生成变化值
-func generateVariationWithConstraints(value any, fieldName string, variationRate float64) any {
-	// 处理嵌套结构
-	switch v := value.(type) {
-	case map[string]any:
-		// 对象，先检查是否有针对整个对象的约束
-		if constraint := FindFieldConstraint(fieldName); constraint != nil {
-			// 如果是keep_original约束，需要特殊处理：保持原值但允许子字段覆盖
-			if constraint.Type == "keep_original" || (constraint.KeepOriginal != nil && *constraint.KeepOriginal) {
-				// 递归处理每个属性，子字段的约束优先
-				result := make(map[string]any)
-				for key, item := range v {
-					// 构建嵌套字段名
-					nestedFieldName := fieldName + "." + key
-					// 检查子字段是否有单独的约束
-					if childConstraint := FindFieldConstraint(nestedFieldName); childConstraint != nil {
-						// 子字段有约束，使用子字段约束
-						result[key] = generateVariationWithConstraints(item, nestedFieldName, variationRate)
-					} else if childConstraint := FindFieldConstraint(key); childConstraint != nil {
-						// 检查是否有直接字段名的约束
-						result[key] = generateVariationWithConstraints(item, key, variationRate)
-					} else {
-						// 子字段没有约束，保持原值
-						result[key] = item
-					}
-				}
-				return result
-			} else {
-				// 其他类型的约束，直接应用
-				return GenerateConstrainedValue(constraint, value)
-			}
-		} else {
-			// 没有针对整个对象的约束，递归处理每个属性
-			result := make(map[string]any)
-			for key, item := range v {
-				// 构建嵌套字段名
-				nestedFieldName := fieldName + "." + key
-				result[key] = generateVariationWithConstraints(item, nestedFieldName, variationRate)
-			}
-			return result
-		}
-	case []any:
-		// 数组，递归处理每个元素
-		result := make([]any, len(v))
-		for i, item := range v {
-			// 构建数组元素字段名
-			arrayFieldName := fmt.Sprintf("%s[%d]", fieldName, i)
-			result[i] = generateVariationWithConstraints(item, arrayFieldName, variationRate)
-		}
-		return result
-	default:
-		// 基本类型，尝试查找字段约束
-		if constraint := FindFieldConstraint(fieldName); constraint != nil {
-			// 使用约束生成值
-			return GenerateConstrainedValue(constraint, value)
-		}
-		// 没有约束，使用原始变化逻辑
-		return generateVariation(value, variationRate)
-	}
+func generateVariationWithConstraints(value any, fieldName string, variationRate float64, compositeOverrides map[string]string) any {
+    // 处理嵌套结构
+    switch v := value.(type) {
+    case map[string]any:
+        // 对象，先检查是否有针对整个对象的约束
+            if constraint := FindFieldConstraint(fieldName); constraint != nil {
+                // 如果是keep_original约束，需要特殊处理：保持原值但允许子字段覆盖
+                if constraint.Type == "keep_original" || (constraint.KeepOriginal != nil && *constraint.KeepOriginal) {
+                    // 递归处理每个属性，子字段的约束优先
+                    result := make(map[string]any)
+                for key, item := range v {
+                    // 构建嵌套字段名
+                    nestedFieldName := fieldName + "." + key
+                    // 检查子字段是否有单独的约束
+                    if childConstraint := FindFieldConstraint(nestedFieldName); childConstraint != nil {
+                        // 子字段有约束，使用子字段约束
+                        result[key] = generateVariationWithConstraints(item, nestedFieldName, variationRate, compositeOverrides)
+                    } else if childConstraint := FindFieldConstraint(key); childConstraint != nil {
+                        // 检查是否有直接字段名的约束
+                        result[key] = generateVariationWithConstraints(item, key, variationRate, compositeOverrides)
+                    } else {
+                        // 子字段没有约束：在 keep_original 场景下，优先应用组合覆盖，否则保持原值
+                        // 对嵌套结构递归以便向下应用组合覆盖；对基础类型直接保留或覆盖
+                        switch itemTyped := item.(type) {
+                        case map[string]any, []any:
+                            result[key] = generateVariationWithConstraints(item, nestedFieldName, variationRate, compositeOverrides)
+                        default:
+                            // 简化字段名为路径最后一段并归一化后尝试组合覆盖
+                            simpleFieldName := nestedFieldName
+                            if strings.Contains(simpleFieldName, ".") {
+                                parts := strings.Split(simpleFieldName, ".")
+                                simpleFieldName = parts[len(parts)-1]
+                            }
+                            if idx := strings.Index(simpleFieldName, "["); idx != -1 {
+                                simpleFieldName = simpleFieldName[:idx]
+                            }
+                            keyNorm := normalizeKey(simpleFieldName)
+                            if compositeOverrides != nil {
+                                if val, ok := compositeOverrides[keyNorm]; ok {
+                                    result[key] = val
+                                    continue
+                                }
+                            }
+                            // 无组合覆盖，保持原值
+                            result[key] = itemTyped
+                        }
+                    }
+                }
+                return result
+            } else {
+                // 其他类型的约束，直接应用
+                return GenerateConstrainedValue(constraint, value)
+            }
+        } else {
+            // 没有针对整个对象的约束，递归处理每个属性
+            result := make(map[string]any)
+            for key, item := range v {
+                // 构建嵌套字段名
+                nestedFieldName := fieldName + "." + key
+                result[key] = generateVariationWithConstraints(item, nestedFieldName, variationRate, compositeOverrides)
+            }
+            return result
+        }
+    case []any:
+        // 数组，递归处理每个元素
+        result := make([]any, len(v))
+        for i, item := range v {
+            // 构建数组元素字段名
+            arrayFieldName := fmt.Sprintf("%s[%d]", fieldName, i)
+            result[i] = generateVariationWithConstraints(item, arrayFieldName, variationRate, compositeOverrides)
+        }
+        return result
+    default:
+        // 组合约束字段覆盖优先
+        if compositeOverrides != nil {
+            // 简化字段名为路径最后一段
+            simpleFieldName := fieldName
+            if strings.Contains(simpleFieldName, ".") {
+                parts := strings.Split(simpleFieldName, ".")
+                simpleFieldName = parts[len(parts)-1]
+            }
+            // 去掉数组索引标记
+            if idx := strings.Index(simpleFieldName, "["); idx != -1 {
+                simpleFieldName = simpleFieldName[:idx]
+            }
+            key := normalizeKey(simpleFieldName)
+            if val, ok := compositeOverrides[key]; ok {
+                return val
+            }
+        }
+        // 基本类型，尝试查找字段约束
+        if constraint := FindFieldConstraint(fieldName); constraint != nil {
+            // 使用约束生成值
+            return GenerateConstrainedValue(constraint, value)
+        }
+        // 没有约束，使用原始变化逻辑
+        return generateVariation(value, variationRate)
+    }
+}
+
+// buildCompositeOverrides 针对当前测试用例，预先选择每个组合约束的一行数据并构建覆盖映射
+func buildCompositeOverrides() map[string]string {
+    overrides := make(map[string]string)
+    if globalConstraintConfig == nil || globalConstraintConfig.Constraints == nil {
+        return overrides
+    }
+    for _, constraint := range globalConstraintConfig.Constraints {
+        if strings.ToLower(constraint.Type) == "composite" {
+            // 需要 fields 和 data
+            if len(constraint.Fields) == 0 || len(constraint.Data) == 0 {
+                continue
+            }
+            // 随机选择一组数据（以组为单位随机）
+            idx := rand.Intn(len(constraint.Data))
+            row := constraint.Data[idx]
+            if len(row) != len(constraint.Fields) {
+                // 跳过不合法的行
+                continue
+            }
+            for i, f := range constraint.Fields {
+                val := row[i]
+                // 完整路径键（如 user.province）
+                fullKey := normalizeKey(f)
+                overrides[fullKey] = val
+                // 末段字段名键（如 province），兼容嵌套路径
+                simple := f
+                if strings.Contains(simple, ".") {
+                    parts := strings.Split(simple, ".")
+                    simple = parts[len(parts)-1]
+                }
+                if idx := strings.Index(simple, "["); idx != -1 {
+                    simple = simple[:idx]
+                }
+                lastKey := normalizeKey(simple)
+                overrides[lastKey] = val
+            }
+        }
+    }
+    return overrides
 }
 
 // randomizeString 随机修改字符串

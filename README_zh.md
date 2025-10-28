@@ -1,6 +1,6 @@
 # ATC - API自动化测试命令行工具
 
-[![Go Version](https://img.shields.io/badge/Go-1.24+-blue.svg)](https://golang.org/)
+[![Go Version](https://img.shields.io/badge/Go-1.25+-blue.svg)](https://golang.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](#安装)
 
@@ -495,6 +495,38 @@ type = "email_domain_custom"
 - 未知的数据集会被跳过；若配置了 `values` 则仅使用该集合生成。
 - 当 `values` 和 `dataset` 都为空时，字段保留原值不变。
 - 使用 `atc validate -v` 可查看自定义类型和自定义数据集的统计信息。
+
+### 组合约束
+
+当多个字段之间存在强相关性（必须成对/成组出现）时，可使用组合约束确保这些字段在生成阶段共同取值。例如 `province` 与 `city` 必须来自同一地区映射。
+
+示例：
+
+```toml
+[constraints]
+enable = true
+
+[constraints.composite_address]
+type = "composite"
+fields = ["province", "city"]
+data = [["上海", "上海市"], ["北京", "北京市"], ["广东", "广州市"]]
+description = "组合约束：province 与 city 一组选择，保持一致性"
+```
+
+生成行为：
+- 每个测试用例会对每个组合约束随机选择一行 `data`（组级选择）。
+- 该组合中的所有字段（匹配依据为“路径最后一段的字段名”）将被覆盖为所选行中的对应值。
+- 支持嵌套对象与数组内对象：匹配发生在叶子字段（例如 `user.address.province`、`addresses[0].city`）。
+- 字段名匹配采用归一化规则：名称转换为小写、`-` 转为 `_`（例如 `city-name` 与 `city_name` 视为一致）。
+
+验证规则：
+- `fields` 不可为空且必须唯一；`data` 不可为空。
+- `data` 中每一行的元素数量必须与 `fields` 数量一致。
+- 若配置非法，`atc validate` 将报告详细错误信息。
+
+注意事项：
+- 同一测试用例内，组合字段的所有出现点将使用同一组值（一次选择，处处覆盖）。如数组中有多个对象，其对应字段会一致，以保证一致性。
+- 组合约束仅对基础类型字段覆盖生效；若父级字段设置了 `keep_original`，子字段仍会按组合约束覆盖；未覆盖的基础类型保持原值不变。
 
 ### 生成效果对比
 
