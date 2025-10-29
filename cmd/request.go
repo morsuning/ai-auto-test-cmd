@@ -24,10 +24,10 @@ var requestCmd = &cobra.Command{
 例如：localhost:8080/user 将被处理为 http://localhost:8080/user
 
 基本示例：
-  # 自动检测格式并发送请求（CSV第一行为'json'）
-  atc request -u https://xxx.system.com/xxx/xxx -m post -f xxx.csv
+  # 全部使用默认配置文件中的参数这是，自动检测格式并发送请求（CSV第一行为'json'）
+  atc request
 
-  # 使用本地服务器（自动添加http://协议）
+  # 使用本地服务器
   atc request -u localhost:8080/api/test -m post -f xxx.csv
 
   # 根据测试用例文件xxx.csv,批量使用POST方法请求目标系统http接口，发送XML格式数据
@@ -43,7 +43,7 @@ var requestCmd = &cobra.Command{
   atc request -u https://xxx.system.com/xxx/xxx -m post -f xxx.csv --debug
 
 配置文件示例：
-  # 使用配置文件中的参数
+  # 使用指定配置文件中的参数
   atc request -c config.toml
 
   # 使用配置文件，命令行参数覆盖配置文件中的设置
@@ -106,10 +106,14 @@ URL查询参数示例：
 		ignoreTLS, _ := cmd.Flags().GetBool("ignore-tls")
 
 		// 从配置文件读取参数（如果指定了配置文件）
+		if configFile == "" {
+			configFile = "config.toml"
+		}
 		if configFile != "" {
 			config, err := utils.LoadConfig(configFile)
-			if err != nil {
+			if err != nil && (len(url) == 0 || len(filePath) == 0) {
 				fmt.Printf("❌ 加载配置文件失败: %v\n", err)
+				fmt.Println("❌ 错误: 必须指定配置文件或目标URL（通过 -u 参数）和测试用例文件路径（通过 -f 参数）")
 				os.Exit(1)
 			}
 
@@ -190,13 +194,14 @@ URL查询参数示例：
 			headers := data[0]
 			if len(headers) == 1 {
 				headerUpper := strings.ToUpper(headers[0])
-				if headerUpper == "XML" {
+				switch headerUpper {
+				case "XML":
 					contentType = "xml"
 					fmt.Println("✅ 自动检测到XML格式")
-				} else if headerUpper == "JSON" {
+				case "JSON":
 					contentType = "json"
 					fmt.Println("✅ 自动检测到JSON格式")
-				} else {
+				default:
 					fmt.Printf("❌ 错误: 无法自动检测请求体格式。CSV文件第一行应该是 'xml' 或 'json'，当前为: '%s'\n", headers[0])
 					fmt.Println("提示: 请在CSV文件第一行写入 'xml' 或 'json'，或使用 --xml 或 --json 参数手动指定格式")
 					os.Exit(1)
@@ -237,7 +242,7 @@ func init() {
 	rootCmd.AddCommand(requestCmd)
 
 	// 配置文件参数组
-	requestCmd.Flags().StringP("config", "c", "config.toml", "配置文件路径（可选，默认为config.toml）")
+	requestCmd.Flags().StringP("config", "c", "", "配置文件路径（可选，默认为config.toml）")
 
 	// 必填参数组
 	requestCmd.Flags().StringP("url", "u", "", "目标URL（可选，可从配置文件读取）")

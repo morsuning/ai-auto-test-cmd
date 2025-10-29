@@ -162,7 +162,7 @@ func IsConstraintsEnabled(config *Config) bool {
 	}
 
 	// 默认值：如果有约束配置则启用，否则禁用
-	return len(config.Constraints.Constraints) > 0 || len(config.Constraints.BuiltinData.FirstNames) > 0 || len(config.BuiltinData.FirstNames) > 0
+	return len(config.Constraints.Constraints) > 0
 }
 
 // LoadDefaultConfig 加载默认配置文件(config.toml)

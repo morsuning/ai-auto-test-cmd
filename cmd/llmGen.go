@@ -50,12 +50,16 @@ var llmGenCmd = &cobra.Command{
 
 		// 从配置文件读取参数（如果指定了配置文件或使用默认配置文件）
 		var config *utils.Config
-		if configFile != "" || baseURL == "" || apiKey == "" || num == 5 || output == "" {
+		if configFile == "" {
+			configFile = "config.toml"
+		}
+		// 必须指定的参数
+		if baseURL == "" || apiKey == "" || output == "" || (xmlContent == "" && jsonContent == "") {
 			var err error
 			config, err = utils.LoadConfig(configFile)
 			if err != nil && (baseURL == "" || apiKey == "") {
 				fmt.Printf("❌ 错误: 无法加载配置文件 %s: %v\n", configFile, err)
-				fmt.Println("请通过 -u 和 --api-key 参数显式指定，或创建配置文件")
+				fmt.Println("请输入必填参数或指定配置文件")
 				return
 			}
 
@@ -144,6 +148,25 @@ var llmGenCmd = &cobra.Command{
 			}
 		}
 
+		// 验证必需参数
+		if baseURL == "" {
+			fmt.Println("❌ 错误: 必须指定LLM API Base URL（通过 -u 参数或配置文件）")
+			return
+		}
+		if apiKey == "" {
+			fmt.Println("❌ 错误: 必须指定LLM API Key（通过 --api-key 参数或配置文件）")
+			return
+		}
+		// 设置默认输出文件
+		if output == "" {
+			output = "test_cases.csv"
+		}
+		// 验证生成数量限制
+		if num <= 0 {
+			fmt.Println("❌ 错误: 生成数量必须大于0")
+			return
+		}
+
 		// 如果使用exec参数，从配置文件读取request相关参数
 		var requestParams RequestParams
 		if exec {
@@ -171,34 +194,13 @@ var llmGenCmd = &cobra.Command{
 				requestParams.Timeout = 30
 			}
 			if requestParams.Concurrent == 0 {
-				requestParams.Concurrent = 1
+				requestParams.Concurrent = 3
 			}
 
 			if err := validateRequestParams(requestParams); err != nil {
 				fmt.Printf("❌ 配置文件中的request参数验证失败: %v\n", err)
 				return
 			}
-		}
-
-		// 验证必需参数
-		if baseURL == "" {
-			fmt.Println("❌ 错误: 必须指定LLM API Base URL（通过 -u 参数或配置文件）")
-			return
-		}
-		if apiKey == "" {
-			fmt.Println("❌ 错误: 必须指定LLM API Key（通过 --api-key 参数或配置文件）")
-			return
-		}
-
-		// 验证生成数量限制
-		if num <= 0 {
-			fmt.Println("❌ 错误: 生成数量必须大于0")
-			return
-		}
-
-		// 设置默认输出文件
-		if output == "" {
-			output = "test_cases.csv"
 		}
 
 		// 打印开始信息
@@ -270,33 +272,29 @@ var llmGenCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(llmGenCmd)
 
-	// 必填参数组 - 报文格式和内容（必须选择其一）
-	llmGenCmd.Flags().StringP("xml", "x", "", "XML格式报文内容")
-	llmGenCmd.Flags().StringP("json", "j", "", "JSON格式报文内容")
+	// 报文格式和内容
+	llmGenCmd.Flags().StringP("xml", "x", "", "XML格式报文内容，不填写则从配置文件读取")
+	llmGenCmd.Flags().StringP("json", "j", "", "JSON格式报文内容，不填写则从配置文件读取")
 
 	// API连接参数组
-	llmGenCmd.Flags().StringP("url", "u", "", "LLM API Base URL")
-	llmGenCmd.Flags().String("api-key", "", "LLM API Key")
-	llmGenCmd.Flags().StringP("config", "c", "config.toml", "配置文件路径（默认为config.toml）")
+	llmGenCmd.Flags().StringP("url", "u", "", "LLM API Base URL，不填写则从配置文件读取")
+	llmGenCmd.Flags().String("api-key", "", "LLM API Key，不填写则从配置文件读取")
+	llmGenCmd.Flags().StringP("config", "c", "", "配置文件路径（可选，不填写则默认为config.toml）")
 
 	// 生成控制参数组
 	llmGenCmd.Flags().IntP("num", "n", 5, "生成用例数量（默认5）")
 	llmGenCmd.Flags().StringP("prompt", "p", "", "自定义提示词文件路径（文件必须是UTF-8编码）")
 
 	// 输出控制参数组
-	llmGenCmd.Flags().StringP("output", "o", "", "输出文件路径（默认为当前目录下的test_cases.csv）")
+	llmGenCmd.Flags().StringP("output", "o", "", "输出文件路径（不填写则默认为当前目录下的test_cases.csv）")
 
 	// 执行控制参数组
-	llmGenCmd.Flags().BoolP("exec", "e", false, "生成测试用例后立即执行")
+	// 注意：使用-e参数时，request相关参数从配置文件读取
+	llmGenCmd.Flags().BoolP("exec", "e", false, "生成测试用例后立即执行（需要配置文件中的request相关参数）")
 
 	// 调试参数组
 	llmGenCmd.Flags().BoolP("debug", "d", false, "启用调试模式")
 
-	// 注意：使用-e参数时，request相关参数从配置文件读取
-
 	// 自定义参数显示顺序
 	llmGenCmd.Flags().SortFlags = false
-
-	// 注意：url和api-key参数不再是必需的，可以从配置文件读取
-	// raw和file参数互斥，在Run函数中进行验证
 }

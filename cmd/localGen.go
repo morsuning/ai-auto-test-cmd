@@ -18,11 +18,10 @@ var localGenCmd = &cobra.Command{
 
 支持两种生成模式：
 1. 随机变化模式：对原始数据进行随机变化（默认模式）
-2. 智能约束模式：根据字段名应用相应的约束规则，生成更真实的测试数据
+2. 智能约束模式：根据字段名应用相应的约束规则，生成更真实的测试数据，必须使用配置文件
 
 随机化因子配置：
-- 可通过配置文件中的 testcase.variation_rate 设置随机化程度（0.0-1.0）
-- 默认值为 0.5（50%变化程度）
+- 可通过配置文件中的 testcase.variation_rate 设置随机化程度（0.0-1.0），默认值为 0.5（50%变化程度）
 - 值越大，生成的数据变化越大；值越小，生成的数据越接近原始数据
 
 约束系统开关：
@@ -57,22 +56,29 @@ var localGenCmd = &cobra.Command{
 		exec, _ := cmd.Flags().GetBool("exec")
 
 		// 加载配置文件
-		var config *utils.Config
-		if configFile != "" {
-			var err error
-			config, err = utils.LoadConfigWithConstraints(configFile)
-			if err != nil {
-				fmt.Printf("❌ 加载配置文件失败: %v\n", err)
-				return
-			}
+		if configFile == "" {
+			configFile = "config.toml"
+		}
+		config, err := utils.LoadConfigWithConstraints(configFile)
+		// 加载配置文件失败，且必填参数缺失
+		if err != nil && (xmlContent == "" && jsonContent == "") {
+			fmt.Printf("❌ 加载配置文件失败: %v\n", err)
+			fmt.Println("请输入必填参数或指定配置文件")
+			return
+		}
+		if err == nil {
 			fmt.Printf("📄 加载配置文件: %s\n", configFile)
-
 			// 从配置文件补充缺失的参数
 			if num == 10 && config.TestCase.Num != 0 { // 只有当num是默认值时才从配置文件读取
 				num = config.TestCase.Num
 			}
 			if output == "" && config.TestCase.Output != "" {
 				output = config.TestCase.Output
+			}
+		} else {
+			// 未读到配置文件，设置默认值
+			if output == "" {
+				output = "test_cases.csv"
 			}
 		}
 
@@ -140,7 +146,6 @@ var localGenCmd = &cobra.Command{
 				fmt.Println("❌ 错误: 使用 --exec 参数时必须指定配置文件")
 				return
 			}
-
 			requestParams = RequestParams{
 				URL:           config.Request.URL,
 				Method:        config.Request.Method,
@@ -174,11 +179,6 @@ var localGenCmd = &cobra.Command{
 			}
 		}
 
-		// 设置默认输出文件
-		if output == "" {
-			output = "test_cases.csv"
-		}
-
 		// 打印参数信息
 		fmt.Println("🔧 本地生成测试用例")
 		fmt.Printf("📝 报文格式: %s\n", getFormatName(isXML, isJSON))
@@ -190,36 +190,35 @@ var localGenCmd = &cobra.Command{
 		var useConstraints bool
 		if config != nil {
 			useConstraints = utils.IsConstraintsEnabled(config)
-
 			if useConstraints {
 				// 检查是否有约束配置
-				if len(config.Constraints.Constraints) > 0 || len(config.Constraints.BuiltinData.FirstNames) > 0 || len(config.BuiltinData.FirstNames) > 0 {
+				if len(config.Constraints.Constraints) > 0 {
 					fmt.Println("✅ 约束系统已启用，智能约束模式生效")
 				} else {
 					fmt.Println("⚠️  约束系统已启用，但未找到约束配置，将使用随机变化模式")
 					useConstraints = false
 				}
 			} else {
-				fmt.Println("📋 约束系统已禁用，使用随机变化模式")
+				fmt.Println("📋 约束系统未启用，使用随机变化模式")
 			}
 		}
 
 		// 解析报文并生成测试用例
 		var data map[string]any
-		var err error
+		var parseErr error
 
 		if isXML {
 			// 解析XML
-			data, err = utils.ParseXML(inputContent)
-			if err != nil {
-				fmt.Printf("解析XML失败: %v\n", err)
+			data, parseErr = utils.ParseXML(inputContent)
+			if parseErr != nil {
+				fmt.Printf("解析XML失败: %v\n", parseErr)
 				return
 			}
 		} else {
 			// 解析JSON
-			data, err = utils.ParseJSON(inputContent)
-			if err != nil {
-				fmt.Printf("解析JSON失败: %v\n", err)
+			data, parseErr = utils.ParseJSON(inputContent)
+			if parseErr != nil {
+				fmt.Printf("解析JSON失败: %v\n", parseErr)
 				return
 			}
 		}
@@ -264,9 +263,9 @@ var localGenCmd = &cobra.Command{
 		}
 
 		// 保存到文件
-		err = utils.SaveToCSV(csvData, output)
-		if err != nil {
-			fmt.Printf("保存CSV文件失败: %v\n", err)
+		saveErr := utils.SaveToCSV(csvData, output)
+		if saveErr != nil {
+			fmt.Printf("保存CSV文件失败: %v\n", saveErr)
 			return
 		}
 		fmt.Printf("✅ 成功生成 %d 条测试用例并保存到 %s\n", num, output)
@@ -312,7 +311,7 @@ var localGenCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(localGenCmd)
 
-	// 必填参数组 - 报文格式和内容（必须选择其一）
+	// 报文格式和内容
 	localGenCmd.Flags().StringP("xml", "x", "", "XML格式报文内容")
 	localGenCmd.Flags().StringP("json", "j", "", "JSON格式报文内容")
 
@@ -320,18 +319,15 @@ func init() {
 	localGenCmd.Flags().IntP("num", "n", 10, "生成用例数量（默认10）")
 
 	// 配置文件参数组
-	localGenCmd.Flags().StringP("config", "c", "config.toml", "配置文件路径（包含约束配置和其他设置）")
+	localGenCmd.Flags().StringP("config", "c", "", "配置文件路径（可选，默认为config.toml）")
 
 	// 输出控制参数组
 	localGenCmd.Flags().StringP("output", "o", "", "输出文件路径（默认为当前目录下的test_cases.csv）")
 
 	// 执行控制参数组
-	localGenCmd.Flags().BoolP("exec", "e", false, "生成测试用例后立即执行")
-
 	// 注意：使用-e参数时，request相关参数从配置文件读取
+	localGenCmd.Flags().BoolP("exec", "e", false, "生成测试用例后立即执行")
 
 	// 自定义参数显示顺序
 	localGenCmd.Flags().SortFlags = false
-
-	// 注意：raw和file参数互斥，在Run函数中进行验证
 }

@@ -54,8 +54,6 @@ var rootCmd = &cobra.Command{
 	},
 }
 
-// Execute adds all child commands to the root command and sets flags appropriately.
-// This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
 	err := rootCmd.Execute()
 	if err != nil {
@@ -64,12 +62,9 @@ func Execute() {
 }
 
 func init() {
-
 	// 添加--version标志到根命令
 	rootCmd.Flags().BoolP("version", "v", false, "显示版本信息")
 
 	// 这里定义全局标志和配置设置
 	// Cobra支持持久性标志，如果在此处定义，将对应用程序全局有效
-
-	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.ai-auto-test-cmd.yaml)")
 }
