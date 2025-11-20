@@ -64,6 +64,5 @@ coverage.out
 $GOPATH/pkg/mod/
 
 # Docs directory
-docs
 
 CLAUDE.md
