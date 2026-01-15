@@ -23,6 +23,7 @@ type RequestConfig struct {
 	SavePath        string   `toml:"save_path"`         // 结果保存路径
 	Timeout         int      `toml:"timeout"`           // 请求超时时间
 	Concurrent      int      `toml:"concurrent"`        // 并发请求数
+	Duration        string   `toml:"duration"`          // 压测持续时间（如 "30s", "5m", "1h"）
 	AuthBearer      string   `toml:"auth_bearer"`       // Bearer Token认证
 	AuthBasic       string   `toml:"auth_basic"`        // Basic Auth认证
 	AuthAPIKey      string   `toml:"auth_api_key"`      // API Key认证

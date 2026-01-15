@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/morsuning/ai-auto-test-cmd/models"
@@ -81,8 +82,27 @@ func executeGeneratedTestCases(outputFile string, params RequestParams) error {
 		CustomHeaders: params.CustomHeaders,
 	}
 
-	// 执行批量请求
-	if err := executeBatchRequestsWithAuth(params.URL, params.Method, outputFile, params.SavePath, params.Timeout, params.Concurrent, contentType, params.Debug, authConfig, params.QueryParams, params.IgnoreTLS); err != nil {
+	// 读取测试用例文件
+	fmt.Println("📖 正在读取测试用例文件...")
+	data, err := utils.ReadCSV(outputFile)
+	if err != nil {
+		return fmt.Errorf("读取CSV文件失败: %v", err)
+	}
+
+	if len(data) == 0 {
+		return fmt.Errorf("CSV文件为空")
+	}
+
+	// 解析CSV数据为测试用例
+	testCases, err := parseCSVToTestCases(data)
+	if err != nil {
+		return fmt.Errorf("解析测试用例失败: %v", err)
+	}
+
+	fmt.Printf("✅ 成功读取 %d 个测试用例\n\n", len(testCases))
+
+	// 执行流式批量请求
+	if err := executeStreamingRequests(testCases, params.URL, params.Method, params.SavePath, params.Timeout, params.Concurrent, contentType, params.Debug, authConfig, params.QueryParams, params.IgnoreTLS); err != nil {
 		return fmt.Errorf("执行测试用例失败: %v", err)
 	}
 
@@ -116,34 +136,9 @@ func executeTestCasesDirectly(testCases []models.TestCase, params RequestParams)
 		CustomHeaders: params.CustomHeaders,
 	}
 
-	// 构建HTTP请求
-	useJSON := strings.ToLower(contentType) == "json"
-	useXML := strings.ToLower(contentType) == "xml"
-	requests, err := buildHTTPRequestsWithAuth(testCases, params.URL, params.Method, params.Timeout, useJSON, useXML, authConfig, params.QueryParams, params.IgnoreTLS)
-	if err != nil {
-		return fmt.Errorf("构建HTTP请求失败: %v", err)
-	}
-
-	// 如果启用调试模式，输出请求详情
-	if params.Debug {
-		printDebugInfo(requests)
-	}
-
-	// 执行批量请求
-	fmt.Println("🚀 开始执行批量请求...")
-	start := time.Now()
-	responses := utils.SendConcurrentRequests(requests, params.Concurrent)
-	duration := time.Since(start)
-
-	// 处理响应结果
-	results := processResponses(testCases, responses, requests)
-
-	// 显示结果统计
-	displayResults(results, duration, params.Debug)
-
-	// 保存结果（如果需要）
-	if err := saveResults(results, params.SavePath); err != nil {
-		return fmt.Errorf("保存结果失败: %v", err)
+	// 执行流式批量请求
+	if err := executeStreamingRequests(testCases, params.URL, params.Method, params.SavePath, params.Timeout, params.Concurrent, contentType, params.Debug, authConfig, params.QueryParams, params.IgnoreTLS); err != nil {
+		return fmt.Errorf("执行测试用例失败: %v", err)
 	}
 
 	return nil
@@ -605,4 +600,135 @@ func printResponseDetails(testCaseNum int, result models.TestResult) {
 
 	fmt.Println("└─────────────────────────────────────────────────────────────")
 	fmt.Println()
+}
+
+// executeStreamingRequests 执行流式批量请求，实时输出和保存结果
+func executeStreamingRequests(testCases []models.TestCase, url, method, savePath string, timeout, concurrent int, contentType string, debug bool, authConfig AuthConfig, queryParams []string, ignoreTLS bool) error {
+	// 构建HTTP请求
+	useJSON := strings.ToLower(contentType) == "json"
+	useXML := strings.ToLower(contentType) == "xml"
+	requests, err := buildHTTPRequestsWithAuth(testCases, url, method, timeout, useJSON, useXML, authConfig, queryParams, ignoreTLS)
+	if err != nil {
+		return err
+	}
+
+	// 确定保存路径
+	if savePath == "" {
+		savePath = "result.csv"
+	}
+
+	// 如果指定的是目录，则在目录下创建默认文件名
+	if info, err := os.Stat(savePath); err == nil && info.IsDir() {
+		timestamp := time.Now().Format("20060102_150405")
+		savePath = filepath.Join(savePath, fmt.Sprintf("test_result_%s.csv", timestamp))
+	}
+
+	// 创建增量CSV写入器
+	csvWriter, err := utils.NewIncrementalCSVWriter(savePath)
+	if err != nil {
+		return fmt.Errorf("创建CSV写入器失败: %v", err)
+	}
+	defer csvWriter.Close()
+
+	// 写入CSV表头
+	header := []string{"测试用例ID", "原始请求报文", "响应体", "是否成功", "状态码", "错误信息", "耗时(ms)"}
+	if err := csvWriter.WriteRow(header); err != nil {
+		return fmt.Errorf("写入CSV表头失败: %v", err)
+	}
+
+	fmt.Printf("💾 结果将保存到: %s\n", savePath)
+	fmt.Println()
+
+	// 执行批量请求
+	fmt.Println("🚀 开始执行批量请求...")
+	start := time.Now()
+
+	// 统计信息
+	var successCount, failedCount int
+	var mu sync.Mutex // 保护统计变量
+
+	// 创建回调函数
+	callback := utils.RequestCallback{
+		OnBeforeRequest: func(index int, req utils.HTTPRequest) {
+			// 请求发送前输出信息
+			// debug模式下不在这里打印request,而是在response返回时成对打印
+			if !debug {
+				fmt.Printf("📤 正在发送请求 %d/%d...\n", index+1, len(requests))
+			} else {
+				fmt.Printf("📤 正在发送请求 %d/%d...\n", index+1, len(requests))
+			}
+		},
+		OnAfterResponse: func(index int, req utils.HTTPRequest, resp utils.HTTPResponse) {
+			// 构建测试结果
+			result := models.TestResult{
+				TestCaseID:      testCases[index].ID,
+				StatusCode:      resp.StatusCode,
+				ResponseBody:    resp.Body,
+				ResponseHeaders: resp.Headers,
+				RequestBody:     req.Body,
+				Duration:        resp.Duration.Milliseconds(),
+			}
+
+			if resp.Error != nil {
+				result.Success = false
+				result.Error = resp.Error.Error()
+			} else {
+				result.Success = resp.StatusCode >= 200 && resp.StatusCode < 300
+			}
+
+			// 更新统计信息
+			mu.Lock()
+			if result.Success {
+				successCount++
+			} else {
+				failedCount++
+			}
+			mu.Unlock()
+
+			// 输出结果到控制台
+			if debug {
+				// debug模式: 成对输出request和response
+				printRequestResponsePair(index+1, req, result)
+			} else {
+				if result.Success {
+					fmt.Printf("✅ 测试用例 %d: 成功 (状态码: %d, 耗时: %dms)\n", index+1, result.StatusCode, result.Duration)
+				} else {
+					if result.Error != "" {
+						fmt.Printf("❌ 测试用例 %d: 失败 - %s\n", index+1, result.Error)
+					} else {
+						fmt.Printf("❌ 测试用例 %d: 失败 (状态码: %d, 耗时: %dms)\n", index+1, result.StatusCode, result.Duration)
+					}
+				}
+			}
+
+			// 立即写入CSV文件
+			row := []string{
+				result.TestCaseID,
+				result.RequestBody,
+				result.ResponseBody,
+				strconv.FormatBool(result.Success),
+				strconv.Itoa(result.StatusCode),
+				result.Error,
+				strconv.FormatInt(result.Duration, 10),
+			}
+			if err := csvWriter.WriteRow(row); err != nil {
+				fmt.Printf("⚠️  警告: 写入CSV失败: %v\n", err)
+			}
+		},
+	}
+
+	// 使用带回调的并发请求函数
+	utils.SendConcurrentRequestsWithCallback(requests, concurrent, callback)
+	duration := time.Since(start)
+
+	// 显示最终统计信息
+	fmt.Println("\n=== 统计信息 ===")
+	fmt.Printf("总计: %d\n", len(testCases))
+	fmt.Printf("成功: %d\n", successCount)
+	fmt.Printf("失败: %d\n", failedCount)
+	fmt.Printf("成功率: %.2f%%\n", float64(successCount)/float64(len(testCases))*100)
+	fmt.Printf("总耗时: %v\n", duration)
+	fmt.Printf("✅ 结果已保存到: %s\n", savePath)
+
+	return nil
 }

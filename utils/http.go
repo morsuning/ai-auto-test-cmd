@@ -138,3 +138,66 @@ func SendConcurrentRequests(requests []HTTPRequest, concurrency int) []HTTPRespo
 
 	return responses
 }
+
+// RequestCallback 请求回调函数类型
+type RequestCallback struct {
+	OnBeforeRequest func(index int, req HTTPRequest)                    // 请求发送前的回调
+	OnAfterResponse func(index int, req HTTPRequest, resp HTTPResponse) // 响应接收后的回调
+}
+
+// SendConcurrentRequestsWithCallback 并发发送多个HTTP请求，支持实时回调
+// 每个请求发送前会调用OnBeforeRequest，收到响应后立即调用OnAfterResponse
+func SendConcurrentRequestsWithCallback(requests []HTTPRequest, concurrency int, callback RequestCallback) []HTTPResponse {
+	if concurrency <= 0 {
+		concurrency = 1
+	}
+
+	total := len(requests)
+	responses := make([]HTTPResponse, total)
+
+	// 创建通道
+	jobs := make(chan int, total)
+	results := make(chan struct {
+		index    int
+		response HTTPResponse
+	}, total)
+
+	// 启动工作协程
+	for w := 1; w <= concurrency; w++ {
+		go func() {
+			for j := range jobs {
+				// 请求发送前回调
+				if callback.OnBeforeRequest != nil {
+					callback.OnBeforeRequest(j, requests[j])
+				}
+
+				// 发送请求
+				resp := SendRequest(requests[j])
+
+				// 响应接收后回调
+				if callback.OnAfterResponse != nil {
+					callback.OnAfterResponse(j, requests[j], resp)
+				}
+
+				results <- struct {
+					index    int
+					response HTTPResponse
+				}{j, resp}
+			}
+		}()
+	}
+
+	// 发送任务
+	for j := 0; j < total; j++ {
+		jobs <- j
+	}
+	close(jobs)
+
+	// 收集结果
+	for a := 0; a < total; a++ {
+		result := <-results
+		responses[result.index] = result.response
+	}
+
+	return responses
+}

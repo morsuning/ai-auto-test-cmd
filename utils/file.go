@@ -1,5 +1,3 @@
-// Package utils 提供了一系列用于数据处理和测试用例生成的工具函数。
-// 包含XML解析、JSON解析以及基于原始数据生成测试用例的功能。
 package utils
 
 import (
@@ -11,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"unicode/utf8"
 )
 
@@ -208,4 +207,134 @@ func IsXMLFile(filePath string) bool {
 func IsJSONFile(filePath string) bool {
 	ext := strings.ToLower(filepath.Ext(filePath))
 	return ext == ".json"
+}
+
+// IncrementalCSVWriter 增量CSV写入器，支持线程安全的实时写入
+type IncrementalCSVWriter struct {
+	file     *os.File    // CSV文件句柄
+	writer   *csv.Writer // CSV写入器
+	mutex    sync.Mutex  // 互斥锁，保证线程安全
+	filePath string      // 文件路径
+	rowCount int         // 已写入的行数
+	closed   bool        // 是否已关闭
+}
+
+// NewIncrementalCSVWriter 创建新的增量CSV写入器
+func NewIncrementalCSVWriter(filePath string) (*IncrementalCSVWriter, error) {
+	// 如果未指定文件路径，则使用默认路径
+	if filePath == "" {
+		filePath = "result.csv"
+	}
+
+	// 确保目录存在
+	dir := filepath.Dir(filePath)
+	if dir != "." {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return nil, fmt.Errorf("创建目录失败: %v", err)
+		}
+	}
+
+	// 创建文件
+	file, err := os.Create(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("创建文件失败: %v", err)
+	}
+
+	// 创建CSV写入器
+	writer := csv.NewWriter(file)
+
+	return &IncrementalCSVWriter{
+		file:     file,
+		writer:   writer,
+		filePath: filePath,
+		rowCount: 0,
+		closed:   false,
+	}, nil
+}
+
+// WriteRow 写入一行数据（线程安全）
+func (w *IncrementalCSVWriter) WriteRow(row []string) error {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
+
+	if w.closed {
+		return fmt.Errorf("CSV写入器已关闭")
+	}
+
+	// 写入数据
+	if err := w.writer.Write(row); err != nil {
+		return fmt.Errorf("写入CSV失败: %v", err)
+	}
+
+	// 立即刷新到磁盘
+	w.writer.Flush()
+	if err := w.writer.Error(); err != nil {
+		return fmt.Errorf("刷新CSV失败: %v", err)
+	}
+
+	w.rowCount++
+	return nil
+}
+
+// WriteRows 批量写入多行数据（线程安全）
+func (w *IncrementalCSVWriter) WriteRows(rows [][]string) error {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
+
+	if w.closed {
+		return fmt.Errorf("CSV写入器已关闭")
+	}
+
+	// 写入所有数据
+	for _, row := range rows {
+		if err := w.writer.Write(row); err != nil {
+			return fmt.Errorf("写入CSV失败: %v", err)
+		}
+		w.rowCount++
+	}
+
+	// 立即刷新到磁盘
+	w.writer.Flush()
+	if err := w.writer.Error(); err != nil {
+		return fmt.Errorf("刷新CSV失败: %v", err)
+	}
+
+	return nil
+}
+
+// Close 关闭CSV写入器
+func (w *IncrementalCSVWriter) Close() error {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
+
+	if w.closed {
+		return nil
+	}
+
+	// 刷新缓冲区
+	w.writer.Flush()
+	if err := w.writer.Error(); err != nil {
+		w.file.Close()
+		return fmt.Errorf("刷新CSV失败: %v", err)
+	}
+
+	// 关闭文件
+	if err := w.file.Close(); err != nil {
+		return fmt.Errorf("关闭文件失败: %v", err)
+	}
+
+	w.closed = true
+	return nil
+}
+
+// GetRowCount 获取已写入的行数
+func (w *IncrementalCSVWriter) GetRowCount() int {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
+	return w.rowCount
+}
+
+// GetFilePath 获取文件路径
+func (w *IncrementalCSVWriter) GetFilePath() string {
+	return w.filePath
 }

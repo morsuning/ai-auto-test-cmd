@@ -7,7 +7,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/morsuning/ai-auto-test-cmd/models"
 	"github.com/morsuning/ai-auto-test-cmd/utils"
@@ -105,54 +104,62 @@ URL查询参数示例：
 		// 获取TLS配置参数
 		ignoreTLS, _ := cmd.Flags().GetBool("ignore-tls")
 
+		// 获取压测参数
+		durationStr, _ := cmd.Flags().GetString("duration")
+
 		// 从配置文件读取参数（如果指定了配置文件）
 		if configFile == "" {
 			configFile = "config.toml"
 		}
 		if configFile != "" {
 			config, err := utils.LoadConfig(configFile)
-			if err != nil && (len(url) == 0 || len(filePath) == 0) {
+			// 只有在配置文件加载成功时才使用其中的值
+			if err == nil {
+				// 从配置文件补充缺失的参数
+				if url == "" && config.Request.URL != "" {
+					url = config.Request.URL
+				}
+				if method == "get" && config.Request.Method != "" { // 只有当method是默认值时才从配置文件读取
+					method = config.Request.Method
+				}
+				if filePath == "" && config.Request.File != "" {
+					filePath = config.Request.File
+				}
+				if savePath == "" && config.Request.SavePath != "" {
+					savePath = config.Request.SavePath
+				}
+				if timeout == 30 && config.Request.Timeout != 0 { // 只有当timeout是默认值时才从配置文件读取
+					timeout = config.Request.Timeout
+				}
+				if concurrent == 3 && config.Request.Concurrent != 0 { // 只有当concurrent是默认值时才从配置文件读取
+					concurrent = config.Request.Concurrent
+				}
+				if authBearer == "" && config.Request.AuthBearer != "" {
+					authBearer = config.Request.AuthBearer
+				}
+				if authBasic == "" && config.Request.AuthBasic != "" {
+					authBasic = config.Request.AuthBasic
+				}
+				if authAPIKey == "" && config.Request.AuthAPIKey != "" {
+					authAPIKey = config.Request.AuthAPIKey
+				}
+				if len(customHeaders) == 0 && len(config.Request.Headers) > 0 {
+					customHeaders = config.Request.Headers
+				}
+				if len(queryParams) == 0 && len(config.Request.Query) > 0 {
+					queryParams = config.Request.Query
+				}
+				if !ignoreTLS && config.Request.IgnoreTLSErrors {
+					ignoreTLS = config.Request.IgnoreTLSErrors
+				}
+				if durationStr == "" && config.Request.Duration != "" {
+					durationStr = config.Request.Duration
+				}
+			} else if len(url) == 0 || len(filePath) == 0 {
+				// 只有在命令行参数不完整且配置文件加载失败时才报错
 				fmt.Printf("❌ 加载配置文件失败: %v\n", err)
 				fmt.Println("❌ 错误: 必须指定配置文件或目标URL（通过 -u 参数）和测试用例文件路径（通过 -f 参数）")
 				os.Exit(1)
-			}
-
-			// 从配置文件补充缺失的参数
-			if url == "" && config.Request.URL != "" {
-				url = config.Request.URL
-			}
-			if method == "get" && config.Request.Method != "" { // 只有当method是默认值时才从配置文件读取
-				method = config.Request.Method
-			}
-			if filePath == "" && config.Request.File != "" {
-				filePath = config.Request.File
-			}
-			if savePath == "" && config.Request.SavePath != "" {
-				savePath = config.Request.SavePath
-			}
-			if timeout == 30 && config.Request.Timeout != 0 { // 只有当timeout是默认值时才从配置文件读取
-				timeout = config.Request.Timeout
-			}
-			if concurrent == 3 && config.Request.Concurrent != 0 { // 只有当concurrent是默认值时才从配置文件读取
-				concurrent = config.Request.Concurrent
-			}
-			if authBearer == "" && config.Request.AuthBearer != "" {
-				authBearer = config.Request.AuthBearer
-			}
-			if authBasic == "" && config.Request.AuthBasic != "" {
-				authBasic = config.Request.AuthBasic
-			}
-			if authAPIKey == "" && config.Request.AuthAPIKey != "" {
-				authAPIKey = config.Request.AuthAPIKey
-			}
-			if len(customHeaders) == 0 && len(config.Request.Headers) > 0 {
-				customHeaders = config.Request.Headers
-			}
-			if len(queryParams) == 0 && len(config.Request.Query) > 0 {
-				queryParams = config.Request.Query
-			}
-			if !ignoreTLS && config.Request.IgnoreTLSErrors {
-				ignoreTLS = config.Request.IgnoreTLSErrors
 			}
 		}
 
@@ -230,10 +237,48 @@ URL查询参数示例：
 			CustomHeaders: customHeaders,
 		}
 
-		// 执行批量请求
-		if err := executeBatchRequestsWithAuth(url, method, filePath, savePath, timeout, concurrent, contentType, debug, authConfig, queryParams, ignoreTLS); err != nil {
-			fmt.Printf("❌ 执行失败: %v\n", err)
-			os.Exit(1)
+		// 判断是否为压测模式
+		if durationStr != "" {
+			// 解析压测时长
+			duration, err := parseDuration(durationStr)
+			if err != nil {
+				fmt.Printf("❌ 解析压测时长失败: %v\n", err)
+				os.Exit(1)
+			}
+
+			// 读取所有测试用例
+			fmt.Println("📖 正在读取测试用例文件...")
+			data, err := utils.ReadCSV(filePath)
+			if err != nil {
+				fmt.Printf("❌ 读取CSV文件失败: %v\n", err)
+				os.Exit(1)
+			}
+
+			if len(data) == 0 {
+				fmt.Println("❌ 错误: CSV文件为空")
+				os.Exit(1)
+			}
+
+			// 解析CSV数据为测试用例
+			testCases, err := parseCSVToTestCases(data)
+			if err != nil {
+				fmt.Printf("❌ 解析测试用例失败: %v\n", err)
+				os.Exit(1)
+			}
+
+			fmt.Printf("✅ 成功读取 %d 个测试用例\n", len(testCases))
+
+			// 执行压测
+			if err := executeBenchmark(testCases, url, method, duration, concurrent, contentType, authConfig, queryParams, ignoreTLS); err != nil {
+				fmt.Printf("❌ 压测执行失败: %v\n", err)
+				os.Exit(1)
+			}
+		} else {
+			// 执行批量请求（普通模式）
+			if err := executeBatchRequestsWithAuth(url, method, filePath, savePath, timeout, concurrent, contentType, debug, authConfig, queryParams, ignoreTLS); err != nil {
+				fmt.Printf("❌ 执行失败: %v\n", err)
+				os.Exit(1)
+			}
 		}
 	},
 }
@@ -256,6 +301,7 @@ func init() {
 	requestCmd.Flags().StringP("method", "m", "get", "请求方法（get/post，默认get，可从配置文件读取）")
 	requestCmd.Flags().IntP("timeout", "t", 30, "请求超时时间（秒，默认30，可从配置文件读取）")
 	requestCmd.Flags().IntP("concurrent", "C", 3, "并发请求数（默认3，可从配置文件读取）")
+	requestCmd.Flags().StringP("duration", "d", "", "压测持续时间，支持s/m/h单位（如：30s, 5m, 1h）。指定此参数后进入压测模式（可选，可从配置文件读取）")
 
 	// 结果保存参数组
 	requestCmd.Flags().String("save-path", "", "结果保存路径（默认为当前目录下的result.csv，可从配置文件读取）")
@@ -302,37 +348,8 @@ func executeBatchRequestsWithAuth(url, method, filePath string, savePath string,
 
 	fmt.Printf("✅ 成功读取 %d 个测试用例\n\n", len(testCases))
 
-	// 构建HTTP请求
-	useJSON := strings.ToLower(contentType) == "json"
-	useXML := strings.ToLower(contentType) == "xml"
-	requests, err := buildHTTPRequestsWithAuth(testCases, url, method, timeout, useJSON, useXML, authConfig, queryParams, ignoreTLS)
-	if err != nil {
-		return err
-	}
-
-	// 如果启用调试模式，输出请求详情
-	if debug {
-		printDebugInfo(requests)
-	}
-
-	// 执行批量请求
-	fmt.Println("🚀 开始执行批量请求...")
-	start := time.Now()
-	responses := utils.SendConcurrentRequests(requests, concurrent)
-	duration := time.Since(start)
-
-	// 处理响应结果
-	results := processResponses(testCases, responses, requests)
-
-	// 显示结果统计
-	displayResults(results, duration, debug)
-
-	// 保存结果（默认保存）
-	if err := saveResults(results, savePath); err != nil {
-		return fmt.Errorf("保存结果失败: %v", err)
-	}
-
-	return nil
+	// 使用流式处理执行批量请求
+	return executeStreamingRequests(testCases, url, method, savePath, timeout, concurrent, contentType, debug, authConfig, queryParams, ignoreTLS)
 }
 
 // parseCSVToTestCases 将CSV数据解析为测试用例

@@ -64,5 +64,8 @@ coverage.out
 $GOPATH/pkg/mod/
 
 # Docs directory
+.chat
+.claude
 
 CLAUDE.md
+todolist.md
